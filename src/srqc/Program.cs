@@ -6,10 +6,10 @@ using System.Runtime.CompilerServices;
 
 ApplicationParameters appParams = new()
 {
-    PodCount = 3,
-    MessageCount = 150,
+    PodCount = 7,
+    MessageCount = 350,
     MinProcessingDelay = 100,
-    MaxProcessingDelay = 200
+    MaxProcessingDelay = 200,
 };
 
 Log.Logger = new LoggerConfiguration()
@@ -19,18 +19,21 @@ Log.Logger = new LoggerConfiguration()
   .CreateLogger();
 
 ILogger _logger = Log.Logger;
+
 _logger.Information("Starting");
 
 Random r = new();
 
 // inbound and outbound message 'queues'
-List<MessageOut> outboundMessages = [];
 List<MessageIn> inboundMessages = [];
+List<MessageOut> outboundMessages = [];
 
 // configure and create the carousel, register event handler
 Carousel carousel = new(config: new CarouselConfiguration()
 {
-    PodCount = appParams.PodCount
+    PodCount = appParams.PodCount,
+    LogInvoke = appParams.LogMessageReadyInvokes,
+    SuppressNoisyINF = appParams.SuppressNoisyINF
 });
 
 carousel.MessageReadyAtExitEvent += (object sender, MessageReadyEventArgs e) =>
@@ -53,10 +56,16 @@ for (int i = 1; i < appParams.MessageCount + 1; i++)
 Stopwatch totalProcessingTime = Stopwatch.StartNew();
 
 // start sending messages into the queue
-foreach (MessageIn message in inboundMessages)
+//foreach (MessageIn message in inboundMessages)
+for (int i = 0; i < inboundMessages.Count; i++)
 {
+    if (i % 25 == 0)
+    {
+        _logger.Information($"inbound heartbeat {i}");
+    }
+
     carousel.WaitForStagingQueue();
-    carousel.LoadMessage(message);
+    carousel.LoadMessage(inboundMessages[i]);
 }
 
 // wait for the carousel to empty
@@ -75,11 +84,12 @@ carousel.Stop();
 // gives us a rough estimation of what the 'serial' message processing time would have been
 int accumulatedMsec = 0;
 
+// set logindividual to false if you do not want to see all the message results
+// at the end
 RunQualityCheck(logindividual: true);
 
 _logger.Information($"total processing time: {totalProcessingTime.Elapsed.TotalMilliseconds} msec.  Accumulated 'Serial' Time: {accumulatedMsec} msec.  Ratio: {accumulatedMsec / totalProcessingTime.Elapsed.TotalMilliseconds}");
 _logger.Information("Done");
-
 
 // runs some quality checks on how messages were processed.
 void RunQualityCheck(bool podidxcheck = true, bool logindividual = false)
@@ -113,7 +123,7 @@ void RunQualityCheck(bool podidxcheck = true, bool logindividual = false)
 
         if (logindividual)
         {
-            _logger.Information($"{message.Id:D6}:{message.ProcessedByPod:D3}:{message.RuntimeMsec:D7}");
+            _logger.Information($"{message.Id:D6}:{message.ProcessedByPod:D3}:{message.RuntimeMsec:D7}:{message.Text}");
         }
     }
 }

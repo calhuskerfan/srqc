@@ -19,11 +19,11 @@ namespace srqc.domain
     {
         ILogger _logger = Log.ForContext<Pod>();
 
-        //public properties
         public Guid Id { get; } = Guid.NewGuid();
         public int Idx { get; private set; }
 
         private volatile int _podstate = (int)PodState.NotInitialized;
+
 
         public PodState State
         {
@@ -48,14 +48,15 @@ namespace srqc.domain
 
         public void ProcessMessage(MessageIn msg)
         {
-            if (State != PodState.WaitingToLoad)
-            {
-                throw new InvalidOperationException($"pod {Idx} is in state {State}");
-            }
+                if (State != PodState.WaitingToLoad)
+                {
+                    throw new InvalidOperationException($"pod {Idx} is in state {State}");
+                }
 
-            State = PodState.Loading;
-            Thread ProcessingThread = new Thread(() => ProcessThreadFunc(msg));
-            ProcessingThread.Start();
+                State = PodState.Loading;
+
+                Thread ProcessingThread = new Thread(() => ProcessThreadFunc(msg));
+                ProcessingThread.Start();
         }
 
         //
@@ -72,7 +73,7 @@ namespace srqc.domain
 
             _message = new MessageOut()
             {
-                Text = msg.Text + ". " + this.Id.ToString(),
+                Text = $"Your new outbound message is: {msg.Text} brought to you from pod {this.Id.ToString()}",
                 Id = msg.Id + 10000,
                 MessageInId = msg.Id,
                 RuntimeMsec = msg.ProcessingMsec,
@@ -102,8 +103,8 @@ namespace srqc.domain
         // then set internal copy to null
         public MessageOut? Unload()
         {
-            State = PodState.WaitingToLoad;
-            return this._message;
+                State = PodState.WaitingToLoad;
+                return this._message;
         }
 
         // 
