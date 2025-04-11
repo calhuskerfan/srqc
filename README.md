@@ -5,11 +5,11 @@ This project is the source code for the [srqc](https://calhuskerfan.github.io/sr
 ## Running
 
 Pre-requisites
--git
--dotnet9
--VSCode or Visual Studio
+- git
+- dotnet9
+- VSCode or Visual Studio
 
 Steps
--sync this repo
--dotnet run –project ./src/srqc -c Release
+- sync this repo
+- dotnet run –project ./src/srqc -c Release
             
