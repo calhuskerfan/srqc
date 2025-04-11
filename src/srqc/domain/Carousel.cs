@@ -9,7 +9,7 @@ namespace srqc.domain
         ILogger _logger = Log.ForContext<Carousel>();
 
         //some internal state
-        private List<Pod> _pods;
+        private Pod[] _pods;
         private volatile int _atExit = 0;
         bool _running = true;
         CarouselConfiguration _config;
@@ -20,27 +20,23 @@ namespace srqc.domain
         // internal synchronization
         private EventWaitHandle StagingQueueWaitToLoadHandle = new EventWaitHandle(true, EventResetMode.ManualReset);
         private EventWaitHandle InternalReadyToLoadHandle = new EventWaitHandle(true, EventResetMode.ManualReset);
-        private RotateLock _rotationLock = new RotateLock();
+
+        private readonly object _rotateLock = new();
 
 
         //staging queue and processing
         public ConcurrentQueue<MessageIn> StagingQueue { get; private set; } = new ConcurrentQueue<MessageIn>();
         internal Thread StagingQueueProcessingThread { get; set; }
 
-        // the pods
-        private Pod[] Pods { get { return _pods.ToArray<Pod>(); } }
-
-
         public Carousel(CarouselConfiguration config)
         {
             _config = config;
 
-            _pods = new List<Pod>();
+            _pods = new Pod[_config.PodCount];
 
             for (int i = 0; i < _config.PodCount; i++)
             {
-                Pod p = new Pod(i);
-                _pods.Add(p);
+                _pods[i] = new Pod(i);
             }
 
             _atExit = _config.PodCount - 1;
@@ -61,37 +57,41 @@ namespace srqc.domain
                 {
                     StagingQueueWaitToLoadHandle.Set();
 
-                    // TODO: We could make this an autoreset and save ourselves a call here.
                     InternalReadyToLoadHandle.WaitOne();
                     InternalReadyToLoadHandle.Reset();
 
-                    _logger.Information("Pod {pod}: Load Message {id}", AtEntrance(), message.Id);
+                    int entryLoadedIdx = AtEntrance();
+                    _pods[entryLoadedIdx].ProcessMessage(message);
 
-                    Pods[AtEntrance()].ProcessMessage(message);
-
-                    _rotationLock.AcquireLock();
-                    if (!Rotate("queue-processor"))
+                    if (!_config.SuppressNoisyINF)
                     {
-                        // NOTE: so if rotate failed here we are going to assume that there is another one coming,
-                        // we could also, 'look ahead' and never call, but they are effectively the same thing
-                        // the thing to come back and re-visit is are there any conditions where this stalls
-                        // the loading
-                        // log as debug since it is not 'abnormal'
-                        if (_logger.IsEnabled(Serilog.Events.LogEventLevel.Debug))
+                        _logger.Information("Pod {pod}: Load Message {id}", entryLoadedIdx, message.Id);
+                    }
+
+                    lock (_rotateLock)
+                    {
+                        //if pod we loaded is still at the entrance, then we can rotate, otherwise
+                        //a thread callback did our work for us
+                        if (entryLoadedIdx == AtEntrance())
                         {
-                            _logger.Debug("Failed to Rotate");
+                            if (!Rotate("queue-processor"))
+                            {
+                                if (_logger.IsEnabled(Serilog.Events.LogEventLevel.Debug))
+                                {
+                                    _logger.Debug($"Failed to Rotate from queue-processor {GetStatus()}");
+                                }
+                            }
                         }
                     }
-                    _rotationLock.ReleaseLock();
                 }
                 else
                 {
-                    _logger.Information("Nothing in Boarding Queue - Sleeping");
+                    _logger.Information("Nothing in Staging Queue - Sleeping");
                     Thread.Sleep(250);
                 }
             }
 
-            _logger.Information("Boarding Queue Thread exiting");
+            _logger.Information("Staging Queue Thread exiting");
         }
 
         // rotate the carousel
@@ -110,42 +110,56 @@ namespace srqc.domain
                 _logger.Debug("Post-Rotate {from}.  {status}", from, GetStatus());
             }
 
-            // since we have now rotated we have an open spot
-            InternalReadyToLoadHandle.Set();
-
-            if (Pods[AtExit()].State == PodState.ReadyToUnload)
+            if (_pods[AtExit()].State == PodState.ReadyToUnload)
             {
                 this.OnMessageReady(new MessageReadyEventArgs()
                 {
-                    Message = Pods[AtExit()].Unload()
+                    Message = _pods[AtExit()].Unload()
                 });
 
-                _logger.Information("Pod {idx}: Unloaded Message {id} from {driver}", AtExit(), Pods[AtExit()].GetMessageId(), "rotate");
+                if (!_config.SuppressNoisyINF)
+                {
+                    _logger.Information("Pod {idx}: Unloaded Message {id} from {driver}", AtExit(), _pods[AtExit()].GetMessageId(), "rotate");
+                }
             }
 
-            if (Pods[AtExit()].State == PodState.Running)
+            // since we have now rotated we have an open set event handle for Staging Queue Thread
+            InternalReadyToLoadHandle.Set();
+
+            // if a pod shows up at the exit running we want to free the Staging Queue Thread to start another message
+            // running.  so spawn a thread to wait for pod to finish.
+            if (_pods[AtExit()].State == PodState.Running)
             {
-                new Thread(() =>
+                new Thread((object managedThreadId) =>
                 {
                     if (_logger.IsEnabled(Serilog.Events.LogEventLevel.Debug))
                     {
-                        _logger.Debug("Pod {idx}: Wait for Processing to complete", AtExit());
+                        _logger.Debug("Pod {idx}: Wait for Processing to complete.  ParentThread {threadId}", AtExit(), (int)managedThreadId);
                     }
 
-                    Pods[AtExit()].WaitForProcessingComplete();
+                    _pods[AtExit()].WaitForProcessingComplete();
 
-                    this.OnMessageReady(new MessageReadyEventArgs()
+                    lock (_rotateLock)
                     {
-                        Message = Pods[AtExit()].Unload()
-                    });
+                        //wait till we get the lock to actually unload.
+                        this.OnMessageReady(new MessageReadyEventArgs()
+                        {
+                            Message = _pods[AtExit()].Unload()
+                        });
 
-                    _logger.Information("Pod {idx}: Unloaded Message {id} from {driver}", AtExit(), Pods[AtExit()].GetMessageId(), "wait to unload");
+                        if (!_config.SuppressNoisyINF)
+                        {
+                            _logger.Information("Pod {idx}: Unloaded Message {id} from {driver}", AtExit(), _pods[AtExit()].GetMessageId(), "wait to unload");
+                        }
 
-                    _rotationLock.AcquireLock();
-                    Rotate("thread");
-                    _rotationLock.ReleaseLock();
+                        if (!Rotate("callback"))
+                        {
+                            // NOTE: we should never get here.  ok to remove.
+                            _logger.Error($"Failed to Rotate from callback {GetStatus()}");
+                        }
+                    }
 
-                }).Start();
+                }).Start(System.Threading.Thread.CurrentThread.ManagedThreadId);
 
                 return true;
             }
@@ -154,14 +168,11 @@ namespace srqc.domain
             // the main goal is to quickly rotate the last of the messages off of the carousel if there
             // are no messages waiting in the staging queue
             if (StagingQueue.Count == 0
-                && Pods[AtEntrance()].State == PodState.WaitingToLoad
-                && Pods[AtExit()].State == PodState.WaitingToLoad
+                && _pods[AtEntrance()].State == PodState.WaitingToLoad
+                && _pods[AtExit()].State == PodState.WaitingToLoad
                 && !IsCarouselEmpty())
             {
-                if (_logger.IsEnabled(Serilog.Events.LogEventLevel.Debug))
-                {
-                    _logger.Debug("Recurse");
-                }
+                _logger.Information("Recurse");
                 Rotate("Recurse");
             }
 
@@ -217,18 +228,22 @@ namespace srqc.domain
             }
         }
 
-
         // fire message ready event
         protected virtual void OnMessageReady(MessageReadyEventArgs e)
         {
+            if (_config.LogInvoke)
+            {
+                _logger.Information("Pod {idx}: Invoke Message Ready {messageId}", e.Message.ProcessedByPod, e.Message.Id);
+            }
+
             MessageReadyAtExitEvent?.Invoke(this, e);
         }
 
         //we cannot rotate if the pod at exit is running or waiting to unload
         protected bool CanRotate()
         {
-            if (Pods[AtExit()].State == PodState.Running
-                || Pods[AtExit()].State == PodState.ReadyToUnload)
+            if (_pods[AtExit()].State == PodState.Running
+                || _pods[AtExit()].State == PodState.ReadyToUnload)
             {
                 return false;
             }
@@ -251,9 +266,9 @@ namespace srqc.domain
         // empty if all pods in WaitingToLoad State
         public bool IsCarouselEmpty()
         {
-            foreach (var item in Pods)
+            for (int i = 0; i < _pods.Length; i++)
             {
-                if (item.State != PodState.WaitingToLoad)
+                if (_pods[i].State != PodState.WaitingToLoad)
                 {
                     return false;
                 }
@@ -262,18 +277,21 @@ namespace srqc.domain
             return true;
         }
 
-        // a string that can be used to visualize the state of the carouse;
+        // a string that can be used to visualize the state of the carousel;
         private string GetStatus()
         {
             StringBuilder sb = new StringBuilder();
             int f = AtEntrance();
-            for (int i = 0; i < Pods.Length; i++)
+            for (int i = 0; i < _pods.Length; i++)
             {
-                sb.Append(Pods[f].ToString());
+                sb.Append(_pods[f].ToString());
+                sb.Append("[");
+                sb.Append(_pods[f].GetMessageId());
+                sb.Append("]");
                 sb.Append("-->");
 
                 f++;
-                if (f >= Pods.Length)
+                if (f >= _pods.Length)
                 {
                     f = 0;
                 }
