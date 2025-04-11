@@ -1,0 +1,11 @@
+obj
+bin
+.vs
+
+*.bkp
+*.dtmp
+
+*.user.md
+*.user.ps1
+
+.user/*
