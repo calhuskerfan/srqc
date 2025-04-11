@@ -1,4 +1,4 @@
-# Smugglers Run Queue Consumer
+# SR Queue Consumer
 
 This project is the source code for the [srqc](https://calhuskerfan.github.io/srqc)
 
