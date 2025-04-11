@@ -2,6 +2,6 @@
 {
     public class MessageReadyEventArgs : EventArgs
     {
-        public MessageOut? Message { get; set; }
+        public required MessageOut Message { get; set; }
     }
 }

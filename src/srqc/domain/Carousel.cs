@@ -9,17 +9,18 @@ namespace srqc.domain
         ILogger _logger = Log.ForContext<Carousel>();
 
         //some internal state
-        private Pod[] _pods;
+        private readonly Pod[] _pods;
         private volatile int _atExit = 0;
         bool _running = true;
-        CarouselConfiguration _config;
+        private readonly CarouselConfiguration _config;
 
         // Informs listener that a message is ready
         public event EventHandler<MessageReadyEventArgs>? MessageReadyAtExitEvent;
 
         // internal synchronization
-        private EventWaitHandle StagingQueueWaitToLoadHandle = new EventWaitHandle(true, EventResetMode.ManualReset);
-        private EventWaitHandle InternalReadyToLoadHandle = new EventWaitHandle(true, EventResetMode.ManualReset);
+        private readonly EventWaitHandle StagingQueueWaitToLoadHandle = new EventWaitHandle(true, EventResetMode.ManualReset);
+        private readonly EventWaitHandle InternalReadyToLoadHandle = new EventWaitHandle(true, EventResetMode.ManualReset);
+        private readonly EventWaitHandle ShutdownCompleteHandle = new EventWaitHandle(true, EventResetMode.ManualReset);
 
         private readonly object _rotateLock = new();
 
@@ -92,6 +93,8 @@ namespace srqc.domain
             }
 
             _logger.Information("Staging Queue Thread exiting");
+
+            ShutdownCompleteHandle.Set();
         }
 
         // rotate the carousel
@@ -130,11 +133,11 @@ namespace srqc.domain
             // running.  so spawn a thread to wait for pod to finish.
             if (_pods[AtExit()].State == PodState.Running)
             {
-                new Thread((object managedThreadId) =>
+                new Thread((object? managedThreadId) =>
                 {
                     if (_logger.IsEnabled(Serilog.Events.LogEventLevel.Debug))
                     {
-                        _logger.Debug("Pod {idx}: Wait for Processing to complete.  ParentThread {threadId}", AtExit(), (int)managedThreadId);
+                        _logger.Debug("Pod {idx}: Wait for Processing to complete.  ParentThread {threadId}", AtExit(), managedThreadId == null ? 0 : (int)managedThreadId);
                     }
 
                     _pods[AtExit()].WaitForProcessingComplete();
@@ -182,9 +185,14 @@ namespace srqc.domain
 
         public void Stop()
         {
-            //this really needs some work
+            //this needs some work.  a boolean is ok for now, in 
+            //reality we would want to wait for any cleanup, messages to finish, etc.
             _running = false;
-            Thread.Sleep(300);
+
+            ShutdownCompleteHandle.Reset();
+            ShutdownCompleteHandle.WaitOne();
+
+            _logger.Information("Stop Complete");
         }
 
         //blocks loading thread, we could move this internally to 
