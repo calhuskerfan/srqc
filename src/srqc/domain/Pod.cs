@@ -30,6 +30,7 @@ namespace srqc.domain
             get { return (PodState)_podstate; }
             set
             {
+                // volatile should suffice, but leave for now.
                 System.Threading.Interlocked.Exchange(ref _podstate, (int)value);
             }
         }
@@ -48,15 +49,15 @@ namespace srqc.domain
 
         public void ProcessMessage(MessageIn msg)
         {
-                if (State != PodState.WaitingToLoad)
-                {
-                    throw new InvalidOperationException($"pod {Idx} is in state {State}");
-                }
+            if (State != PodState.WaitingToLoad)
+            {
+                throw new InvalidOperationException($"pod {Idx} is in state {State}");
+            }
 
-                State = PodState.Loading;
+            State = PodState.Loading;
 
-                Thread ProcessingThread = new Thread(() => ProcessThreadFunc(msg));
-                ProcessingThread.Start();
+            Thread ProcessingThread = new Thread(() => ProcessThreadFunc(msg));
+            ProcessingThread.Start();
         }
 
         //
@@ -103,8 +104,8 @@ namespace srqc.domain
         // then set internal copy to null
         public MessageOut? Unload()
         {
-                State = PodState.WaitingToLoad;
-                return this._message;
+            State = PodState.WaitingToLoad;
+            return this._message;
         }
 
         // 
