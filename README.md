@@ -32,6 +32,13 @@ ApplicationParameters appParams = new()
 };
 ```
 
+| Parameter | Description |
+| --------- | ----------- |
+| Pod Count | Number of pods assigned to the Carousel
+| MessageCount | Number of Messages to process |
+| MinProcessingDelay | The minimum simulation delay assigned to a message |
+| MaxProcessingDelay | The maximum simulation delay assigned to a message |
+
 ## Some Random Notes
 
 1.  At very low delays I am seeing some thread deadlocking issues, I think it is an issue with the rotate lock in the waiting for pod to unload callback.  The deadlock appears to be in the event handler for OnMessageReady.
