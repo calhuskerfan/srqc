@@ -20,7 +20,7 @@ Steps
     dotnet run --project src/srqc -c Release
     ```
             
-At the top of the program.cs file there are some settings that you can play with.
+At the top of the program.cs file there are some default configuration settings.
 
 ```csharp
 ApplicationParameters appParams = new()
@@ -48,7 +48,16 @@ ApplicationParameters appParams = new()
     ```
     To repeat:
     1. Set the MinProcessingDelay to 0 and the MaxProcessingDelay to 50.
-    1. Set the `LogInvoke` property on the CarouselConfiguration to `false`, and the `SuppressNoisyINF` to `true`.
+    1. Set the `LogInvoke` property on the CarouselConfiguration to `false`, and the `SuppressNoisyINF` to `true` in Program.cs.
+        ```csharp
+        // configure and create the carousel, register event handler
+        Carousel carousel = new(config: new CarouselConfiguration()
+        {
+            PodCount = appParams.PodCount,
+            LogInvoke = false,
+            SuppressNoisyINF = false
+        });
+        ```
     1. Optionally update the message count
     1. run the application
     1. The Heartbeat counter (should) stall at some point, it is not 100%. If it does stall you will need to ctrl^c to terminate.

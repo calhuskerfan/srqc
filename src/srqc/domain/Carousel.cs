@@ -48,6 +48,7 @@ namespace srqc.domain
             StagingQueueProcessingThread.Start();
         }
 
+        // load messages from the staging queue.
         public void ProcessStagingQueueThreadFunc()
         {
             while (_running)
@@ -62,6 +63,7 @@ namespace srqc.domain
                     InternalReadyToLoadHandle.Reset();
 
                     int entryLoadedIdx = AtEntrance();
+
                     _pods[entryLoadedIdx].ProcessMessage(message);
 
                     if (!_config.SuppressNoisyINF)
@@ -126,11 +128,11 @@ namespace srqc.domain
                 }
             }
 
-            // since we have now rotated we have an open set event handle for Staging Queue Thread
+            // since we have now rotated we have an open spot, set event for Staging Queue Thread
             InternalReadyToLoadHandle.Set();
 
             // if a pod shows up at the exit running we want to free the Staging Queue Thread to start another message
-            // running.  so spawn a thread to wait for pod to finish.
+            // running.  so spawn a thread to wait for pod to finish and complete the rotate.
             if (_pods[AtExit()].State == PodState.Running)
             {
                 new Thread((object? managedThreadId) =>
@@ -168,7 +170,7 @@ namespace srqc.domain
             }
 
             // still not completely happy with this.
-            // the main goal is to quickly rotate the last of the messages off of the carousel if there
+            // rotates the last of the messages off of the carousel if there
             // are no messages waiting in the staging queue
             if (StagingQueue.Count == 0
                 && _pods[AtEntrance()].State == PodState.WaitingToLoad
@@ -213,7 +215,7 @@ namespace srqc.domain
             return false;
         }
 
-        // needs a little work, since we rely on inbound queue side to self regulate
+        // needs a little work, relies on inbound queue side to self regulate
         // by calling WaitForStagingQueue
         // we could 'block' here instead
         public void LoadMessage(MessageIn message)
@@ -227,11 +229,6 @@ namespace srqc.domain
 
             if (!ReadyToLoad())
             {
-                if (_logger.IsEnabled(Serilog.Events.LogEventLevel.Verbose))
-                {
-                    _logger.Verbose("Not Ready to Load, Close Staging Queue");
-                }
-
                 StagingQueueWaitToLoadHandle.Reset();
             }
         }
@@ -239,6 +236,7 @@ namespace srqc.domain
         // fire message ready event
         protected virtual void OnMessageReady(MessageReadyEventArgs e)
         {
+            // this should be removed once we finalize the issue with 'message recevied' order.  see readme
             if (_config.LogInvoke)
             {
                 _logger.Information("Pod {idx}: Invoke Message Ready {messageId}", e.Message.ProcessedByPod, e.Message.Id);
@@ -247,7 +245,7 @@ namespace srqc.domain
             MessageReadyAtExitEvent?.Invoke(this, e);
         }
 
-        //we cannot rotate if the pod at exit is running or waiting to unload
+        //we cannot rotate if the pod at exit is running or ready to unload
         protected bool CanRotate()
         {
             if (_pods[AtExit()].State == PodState.Running

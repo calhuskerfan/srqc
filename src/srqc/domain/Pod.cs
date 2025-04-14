@@ -30,6 +30,7 @@ namespace srqc.domain
             get { return (PodState)_podstate; }
             set
             {
+                // volatile should suffice, but leave for now.
                 System.Threading.Interlocked.Exchange(ref _podstate, (int)value);
             }
         }
