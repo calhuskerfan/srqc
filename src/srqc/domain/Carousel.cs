@@ -4,7 +4,7 @@ using System.Text;
 
 namespace srqc.domain
 {
-    public class Carousel
+    public class Carousel : IProcessingContainer
     {
         ILogger _logger = Log.ForContext<Carousel>();
 
@@ -26,7 +26,7 @@ namespace srqc.domain
 
 
         //staging queue and processing
-        public ConcurrentQueue<MessageIn> StagingQueue { get; private set; } = new ConcurrentQueue<MessageIn>();
+        internal ConcurrentQueue<MessageIn> StagingQueue { get; private set; } = new ConcurrentQueue<MessageIn>();
         internal Thread StagingQueueProcessingThread { get; set; }
 
         public Carousel(CarouselConfiguration config)
@@ -49,7 +49,7 @@ namespace srqc.domain
         }
 
         // load messages from the staging queue.
-        public void ProcessStagingQueueThreadFunc()
+        private void ProcessStagingQueueThreadFunc()
         {
             while (_running)
             {
@@ -175,7 +175,7 @@ namespace srqc.domain
             if (StagingQueue.Count == 0
                 && _pods[AtEntrance()].State == PodState.WaitingToLoad
                 && _pods[AtExit()].State == PodState.WaitingToLoad
-                && !IsCarouselEmpty())
+                && !IsContainerEmpty())
             {
                 _logger.Information("Recurse");
                 Rotate("Recurse");
@@ -258,19 +258,19 @@ namespace srqc.domain
         }
 
         //what pod is at the entrance
-        public int AtEntrance()
+        private int AtEntrance()
         {
             return _atExit == _config.PodCount - 1 ? 0 : _atExit + 1;
         }
 
         //what pod is at the exit
-        public int AtExit()
+        private int AtExit()
         {
             return _atExit;
         }
 
         // empty if all pods in WaitingToLoad State
-        public bool IsCarouselEmpty()
+        public bool IsContainerEmpty()
         {
             for (int i = 0; i < _pods.Length; i++)
             {

@@ -56,6 +56,8 @@ namespace srqc.domain
 
             State = PodState.Loading;
 
+            //ProcessingCompleteHandle.Reset();
+
             Thread ProcessingThread = new Thread(() => ProcessThreadFunc(msg));
             ProcessingThread.Start();
         }
@@ -96,6 +98,11 @@ namespace srqc.domain
         //
         public int GetMessageId()
         {
+            if(this._message == null)
+            {
+                return 0;
+            }
+
             return this._message.MessageInId;
         }
 

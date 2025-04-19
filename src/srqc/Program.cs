@@ -2,12 +2,11 @@
 using srqc;
 using srqc.domain;
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
 
 ApplicationParameters appParams = new()
 {
     PodCount = 7,
-    MessageCount = 350,
+    MessageCount = 35,
     MinProcessingDelay = 100,
     MaxProcessingDelay = 200,
 };
@@ -15,12 +14,15 @@ ApplicationParameters appParams = new()
 Log.Logger = new LoggerConfiguration()
   .Enrich.WithThreadId()
   .WriteTo.Console(outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {ThreadId,3} {Message:lj}{NewLine}{Exception}")
-  .MinimumLevel.Information()
+  .MinimumLevel.Debug()
   .CreateLogger();
 
 ILogger _logger = Log.Logger;
 
 _logger.Information("Starting");
+
+var processingContainer = GetProcessingContainer(appParams);
+
 
 Random r = new();
 
@@ -28,18 +30,12 @@ Random r = new();
 List<MessageIn> inboundMessages = [];
 List<MessageOut> outboundMessages = [];
 
-// configure and create the carousel, register event handler
-Carousel carousel = new(config: new CarouselConfiguration()
-{
-    PodCount = appParams.PodCount,
-    LogInvoke = false,
-    SuppressNoisyINF = false
-});
 
-carousel.MessageReadyAtExitEvent += (object sender, MessageReadyEventArgs e) =>
+processingContainer.MessageReadyAtExitEvent += (object sender, MessageReadyEventArgs e) =>
 {
     outboundMessages.Add(e.Message);
 };
+
 
 // add messages to the inbound queue
 for (int i = 1; i < appParams.MessageCount + 1; i++)
@@ -61,16 +57,16 @@ for (int i = 0; i < inboundMessages.Count; i++)
     if (i % 50 == 0)
     {
         //_logger.Information($"inbound heartbeat {i}");
-        Console.WriteLine($"inbound heartbeat {i}");
+        Console.WriteLine($"console inbound heartbeat {i}");
     }
 
-    carousel.WaitForStagingQueue();
-    carousel.LoadMessage(inboundMessages[i]);
+    processingContainer.WaitForStagingQueue();
+    processingContainer.LoadMessage(inboundMessages[i]);
 }
 
 // wait for the carousel to empty
 // consider making this an event
-while (!carousel.IsCarouselEmpty())
+while (!processingContainer.IsContainerEmpty())
 {
     Thread.Sleep(1 * 500);
 }
@@ -79,7 +75,7 @@ totalProcessingTime.Stop();
 
 _logger.Information("empty");
 
-carousel.Stop();
+processingContainer.Stop();
 
 // accumulate a rough estimate of what the 'serial' message processing time would have been
 int accumulatedMsec = 0;
@@ -125,4 +121,20 @@ void RunQualityCheck(bool podidxcheck = true, bool logindividual = false)
             _logger.Information($"{message.Id:D6}:{message.ProcessedByPod:D3}:{message.RuntimeMsec:D7}:{message.Text}");
         }
     }
+}
+
+
+IProcessingContainer GetProcessingContainer(ApplicationParameters parameters)
+{
+    // configure and create the carousel, register event handler
+    //IProcessingContainer processingContainer = new Carousel(config: new CarouselConfiguration()
+    //{
+    //    PodCount = appParams.PodCount,
+    //    LogInvoke = false,
+    //    SuppressNoisyINF = false
+    //});
+
+    processingContainer = new MessageTube(config: new MessageTubeConfig() { PodCount = parameters.PodCount });
+
+    return processingContainer;
 }
