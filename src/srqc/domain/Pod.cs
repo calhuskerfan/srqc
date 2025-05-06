@@ -41,12 +41,17 @@ namespace srqc.domain
         //
         private EventWaitHandle ProcessingCompleteHandle = new EventWaitHandle(true, EventResetMode.ManualReset);
 
-        public Pod(int idx)
+        public Pod(int idx, int init = 0)
         {
             Idx = idx;
             State = PodState.WaitingToLoad;
+            if(init > 0)
+            {
+                Thread.Sleep(init);
+            }
         }
 
+        //
         public void ProcessMessage(MessageIn msg)
         {
             if (State != PodState.WaitingToLoad)
@@ -55,8 +60,6 @@ namespace srqc.domain
             }
 
             State = PodState.Loading;
-
-            //ProcessingCompleteHandle.Reset();
 
             Thread ProcessingThread = new Thread(() => ProcessThreadFunc(msg));
             ProcessingThread.Start();
@@ -80,7 +83,8 @@ namespace srqc.domain
                 Id = msg.Id + 10000,
                 MessageInId = msg.Id,
                 RuntimeMsec = msg.ProcessingMsec,
-                ProcessedByPod = Idx
+                ProcessedByPod = Id,
+                ProcessedByPodIdx = Idx
             };
 
             Thread.Sleep(msg.ProcessingMsec);

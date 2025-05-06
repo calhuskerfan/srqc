@@ -5,8 +5,8 @@ using System.Diagnostics;
 
 ApplicationParameters appParams = new()
 {
-    PodCount = 7,
-    MessageCount = 35,
+    PodCount = 1,
+    MessageCount = 30,
     MinProcessingDelay = 100,
     MaxProcessingDelay = 200,
 };
@@ -22,7 +22,6 @@ ILogger _logger = Log.Logger;
 _logger.Information("Starting");
 
 var processingContainer = GetProcessingContainer(appParams);
-
 
 Random r = new();
 
@@ -51,36 +50,25 @@ for (int i = 1; i < appParams.MessageCount + 1; i++)
 // overall timer
 Stopwatch totalProcessingTime = Stopwatch.StartNew();
 
+_logger.Information("Loading");
+
 // start sending messages into the queue
 for (int i = 0; i < inboundMessages.Count; i++)
 {
-    if (i % 50 == 0)
-    {
-        //_logger.Information($"inbound heartbeat {i}");
-        Console.WriteLine($"console inbound heartbeat {i}");
-    }
-
     processingContainer.WaitForStagingQueue();
     processingContainer.LoadMessage(inboundMessages[i]);
 }
 
-// wait for the carousel to empty
-// consider making this an event
-while (!processingContainer.IsContainerEmpty())
-{
-    Thread.Sleep(1 * 500);
-}
+processingContainer.Stop();
 
 totalProcessingTime.Stop();
 
-_logger.Information("empty");
-
-processingContainer.Stop();
+_logger.Information("Empty");
 
 // accumulate a rough estimate of what the 'serial' message processing time would have been
 int accumulatedMsec = 0;
 
-// set logindividual to false if you do not want to see all the message results at the end
+// set logindividual to true if you not want to see all the message results at the end
 RunQualityCheck(logindividual: true);
 
 _logger.Information($"total processing time: {totalProcessingTime.Elapsed.TotalMilliseconds} msec.  Accumulated 'Serial' Time: {accumulatedMsec} msec.  Ratio: {accumulatedMsec / totalProcessingTime.Elapsed.TotalMilliseconds}");
@@ -98,15 +86,17 @@ void RunQualityCheck(bool podidxcheck = true, bool logindividual = false)
             //sanity check on our processing order
             if (message.Id - outboundMessages[i - 1].Id != 1)
             {
-                _logger.Error($"{message.Id:D6}:{message.ProcessedByPod:D3}:{message.RuntimeMsec:D7}");
+                _logger.Error($"{message.Id:D6}:{message.ProcessedByPodIdx:D3}:{message.RuntimeMsec:D7}");
                 throw new InvalidOperationException($"{message.Id}");
             }
             if (podidxcheck)
             {
                 //just warn, this is not a problem in and of itself
-                var pbp = outboundMessages[i].ProcessedByPod;
-                var pbpp = outboundMessages[i - 1].ProcessedByPod;
-                var exppp = pbp == appParams.PodCount - 1 ? 0 : pbp + 1;
+                var pbp = outboundMessages[i].ProcessedByPodIdx;
+                var pbpp = outboundMessages[i - 1].ProcessedByPodIdx;
+
+                var exppp = pbp == 0 ? appParams.PodCount - 1 : pbp - 1;
+                
                 if (exppp != pbpp)
                 {
                     _logger.Warning($"Pod Missed.  Message Previous to {message.Id} processed by wrong pod.  expected {exppp} actual {pbpp}");
@@ -118,7 +108,7 @@ void RunQualityCheck(bool podidxcheck = true, bool logindividual = false)
 
         if (logindividual)
         {
-            _logger.Information($"{message.Id:D6}:{message.ProcessedByPod:D3}:{message.RuntimeMsec:D7}:{message.Text}");
+            _logger.Information($"{message.Id:D6}:{message.ProcessedByPodIdx:D3}:{message.RuntimeMsec:D7}:{message.Text}");
         }
     }
 }
@@ -126,15 +116,8 @@ void RunQualityCheck(bool podidxcheck = true, bool logindividual = false)
 
 IProcessingContainer GetProcessingContainer(ApplicationParameters parameters)
 {
-    // configure and create the carousel, register event handler
-    //IProcessingContainer processingContainer = new Carousel(config: new CarouselConfiguration()
-    //{
-    //    PodCount = appParams.PodCount,
-    //    LogInvoke = false,
-    //    SuppressNoisyINF = false
-    //});
-
-    processingContainer = new MessageTube(config: new MessageTubeConfig() { PodCount = parameters.PodCount });
-
-    return processingContainer;
+    return new Conduit(config: new ConduitConfig() { 
+        PodCount = parameters.PodCount,
+        ReUsePods = parameters.ReUsePods,
+    });
 }
