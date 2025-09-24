@@ -3,9 +3,15 @@
     public interface IProcessingContainer
     {
         event EventHandler<MessageReadyEventArgs>? MessageReadyAtExitEvent;
-        bool IsContainerEmpty();
-        void LoadMessage(MessageIn message);
+        bool IsConduitEmpty();
+        void LoadMessage(IClaimCheck ticket, MessageIn message);
         void Stop();
-        void WaitForStagingQueue();
+        IClaimCheck WaitForStagingQueueSlotAvailable();
+    }
+
+    public interface IClaimCheck
+    {
+        Guid Ticket { get; set; }
+        DateTime Issued { get; }
     }
 }

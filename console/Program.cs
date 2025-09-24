@@ -3,25 +3,25 @@ using srqc;
 using srqc.domain;
 using System.Diagnostics;
 
-ApplicationParameters appParams = new()
-{
-    PodCount = 1,
-    MessageCount = 30,
-    MinProcessingDelay = 100,
-    MaxProcessingDelay = 200,
-};
-
 Log.Logger = new LoggerConfiguration()
   .Enrich.WithThreadId()
   .WriteTo.Console(outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {ThreadId,3} {Message:lj}{NewLine}{Exception}")
-  .MinimumLevel.Debug()
+  .MinimumLevel.Information()
   .CreateLogger();
 
 ILogger _logger = Log.Logger;
 
 _logger.Information("Starting");
 
-var processingContainer = GetProcessingContainer(appParams);
+ApplicationParameters appParams = new()
+{
+    PodCount = 25,
+    MessageCount = 400,
+    MinProcessingDelay = 30,
+    MaxProcessingDelay = 400,
+};
+
+var processingContainer = console.Application.GetProcessingContainer(appParams);
 
 Random r = new();
 
@@ -29,41 +29,36 @@ Random r = new();
 List<MessageIn> inboundMessages = [];
 List<MessageOut> outboundMessages = [];
 
-
+// exit handler
 processingContainer.MessageReadyAtExitEvent += (object sender, MessageReadyEventArgs e) =>
 {
     outboundMessages.Add(e.Message);
 };
 
+console.Application.LoadInboundMessages(
+    ref inboundMessages,
+    appParams,
+    0);
 
-// add messages to the inbound queue
-for (int i = 1; i < appParams.MessageCount + 1; i++)
-{
-    inboundMessages.Add(new MessageIn()
-    {
-        Id = i,
-        Text = i.ToString(),
-        ProcessingMsec = r.Next(appParams.MinProcessingDelay, appParams.MaxProcessingDelay)
-    });
-}
 
 // overall timer
 Stopwatch totalProcessingTime = Stopwatch.StartNew();
 
-_logger.Information("Loading");
+_logger.Information("Start Loading");
 
 // start sending messages into the queue
 for (int i = 0; i < inboundMessages.Count; i++)
 {
-    processingContainer.WaitForStagingQueue();
-    processingContainer.LoadMessage(inboundMessages[i]);
+    IClaimCheck claimCheck = processingContainer.WaitForStagingQueueSlotAvailable();
+    processingContainer.LoadMessage(claimCheck, inboundMessages[i]);
 }
 
-processingContainer.Stop();
+_logger.Information("Done Loading");
 
+processingContainer.Stop();
 totalProcessingTime.Stop();
 
-_logger.Information("Empty");
+_logger.Information("Container Finished Processing");
 
 // accumulate a rough estimate of what the 'serial' message processing time would have been
 int accumulatedMsec = 0;
@@ -71,8 +66,7 @@ int accumulatedMsec = 0;
 // set logindividual to true if you not want to see all the message results at the end
 RunQualityCheck(logindividual: true);
 
-_logger.Information($"total processing time: {totalProcessingTime.Elapsed.TotalMilliseconds} msec.  Accumulated 'Serial' Time: {accumulatedMsec} msec.  Ratio: {accumulatedMsec / totalProcessingTime.Elapsed.TotalMilliseconds}");
-_logger.Information("Done");
+_logger.Information($"Total processing time: {totalProcessingTime.Elapsed.TotalMilliseconds} msec.  Accumulated 'Serial' Time: {accumulatedMsec} msec.  Ratio: {accumulatedMsec / totalProcessingTime.Elapsed.TotalMilliseconds}");
 
 // runs some quality checks on how messages were processed.
 void RunQualityCheck(bool podidxcheck = true, bool logindividual = false)
@@ -96,7 +90,7 @@ void RunQualityCheck(bool podidxcheck = true, bool logindividual = false)
                 var pbpp = outboundMessages[i - 1].ProcessedByPodIdx;
 
                 var exppp = pbp == 0 ? appParams.PodCount - 1 : pbp - 1;
-                
+
                 if (exppp != pbpp)
                 {
                     _logger.Warning($"Pod Missed.  Message Previous to {message.Id} processed by wrong pod.  expected {exppp} actual {pbpp}");
@@ -114,10 +108,3 @@ void RunQualityCheck(bool podidxcheck = true, bool logindividual = false)
 }
 
 
-IProcessingContainer GetProcessingContainer(ApplicationParameters parameters)
-{
-    return new Conduit(config: new ConduitConfig() { 
-        PodCount = parameters.PodCount,
-        ReUsePods = parameters.ReUsePods,
-    });
-}

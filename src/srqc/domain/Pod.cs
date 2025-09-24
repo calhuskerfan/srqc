@@ -1,4 +1,5 @@
 ﻿using Serilog;
+using System.Diagnostics;
 
 namespace srqc.domain
 {
@@ -20,9 +21,12 @@ namespace srqc.domain
         ILogger _logger = Log.ForContext<Pod>();
 
         public Guid Id { get; } = Guid.NewGuid();
+        
         public int Idx { get; private set; }
 
         private volatile int _podstate = (int)PodState.NotInitialized;
+
+        public TimeSpan LastExecutionTime { get; private set; }
 
 
         public PodState State
@@ -38,17 +42,12 @@ namespace srqc.domain
         // internal members
         private MessageOut? _message = null;
 
-        //
         private EventWaitHandle ProcessingCompleteHandle = new EventWaitHandle(true, EventResetMode.ManualReset);
 
-        public Pod(int idx, int init = 0)
+        public Pod(int idx)
         {
             Idx = idx;
             State = PodState.WaitingToLoad;
-            if(init > 0)
-            {
-                Thread.Sleep(init);
-            }
         }
 
         //
@@ -70,16 +69,20 @@ namespace srqc.domain
         {
             ProcessingCompleteHandle.Reset();
 
+            LastExecutionTime = TimeSpan.Zero;
+
+            Stopwatch sw = Stopwatch.StartNew();
+
             State = PodState.Running;
 
-            if (_logger.IsEnabled(Serilog.Events.LogEventLevel.Verbose))
+            if (_logger.IsEnabled(Serilog.Events.LogEventLevel.Debug))
             {
-                _logger.Verbose("delay for message {id} is {msec}", msg.Id, msg.ProcessingMsec);
+                _logger.Debug("ProcessThreadFunc in pod {idx} has started for message {id} with delay of {msec}", Idx, msg.Id, msg.ProcessingMsec);
             }
 
             _message = new MessageOut()
             {
-                Text = $"Your new outbound message is: {msg.Text} brought to you from pod {this.Id.ToString()}",
+                Text = $"Your new outbound message is: {msg.Text} brought to you from pod {this.Id}",
                 Id = msg.Id + 10000,
                 MessageInId = msg.Id,
                 RuntimeMsec = msg.ProcessingMsec,
@@ -93,8 +96,11 @@ namespace srqc.domain
 
             if (_logger.IsEnabled(Serilog.Events.LogEventLevel.Debug))
             {
-                _logger.Debug("Pod {idx} is complete {state}", Idx, State);
+                _logger.Debug("pod {idx} ProcessThreadFunc has Completed {state}", Idx, State);
             }
+
+            sw.Stop();
+            LastExecutionTime = sw.Elapsed;
 
             ProcessingCompleteHandle.Set();
         }
