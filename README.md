@@ -36,7 +36,7 @@ At the top of the program.cs file there are some default configuration settings.
 ```csharp
 ApplicationParameters appParams = new()
 {
-     PodCount = 3,
+    PodCount = 3,
     MessageCount = 13,
     MinProcessingDelay = 75,
     MaxProcessingDelay = 225,
@@ -52,7 +52,7 @@ ApplicationParameters appParams = new()
 
 ### Scenario Mode
 
-In this mode, a fixed set of messages is generated to test or demonstrate a specific scenarion.  This is not as polished as it should be.
+In this mode, a fixed set of messages is generated to test or demonstrate a specific scenario.  This is not as polished as it should be.
 
 1. Update line (approx) 30
 
