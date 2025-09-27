@@ -21,7 +21,7 @@ namespace srqc.domain
         ILogger _logger = Log.ForContext<Pod>();
 
         public Guid Id { get; } = Guid.NewGuid();
-        
+
         public int Idx { get; private set; }
 
         private volatile int _podstate = (int)PodState.NotInitialized;
@@ -82,7 +82,7 @@ namespace srqc.domain
 
             _message = new MessageOut()
             {
-                Text = $"Your new outbound message is: {msg.Text} brought to you from pod {this.Id}",
+                Text = $"New outbound message is: {msg.Text} from pod {this.Id}",
                 Id = msg.Id + 10000,
                 MessageInId = msg.Id,
                 RuntimeMsec = msg.ProcessingMsec,
@@ -94,10 +94,7 @@ namespace srqc.domain
 
             State = PodState.ReadyToUnload;
 
-            if (_logger.IsEnabled(Serilog.Events.LogEventLevel.Debug))
-            {
-                _logger.Debug("pod {idx} ProcessThreadFunc has Completed {state}", Idx, State);
-            }
+            _logger.Information("pod {idx} ProcessThreadFunc has Completed {state}", Idx, State);
 
             sw.Stop();
             LastExecutionTime = sw.Elapsed;
@@ -108,7 +105,7 @@ namespace srqc.domain
         //
         public int GetMessageId()
         {
-            if(this._message == null)
+            if (this._message == null)
             {
                 return 0;
             }
