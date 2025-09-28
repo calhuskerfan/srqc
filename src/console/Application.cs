@@ -1,10 +1,5 @@
 ﻿using srqc;
 using srqc.domain;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace console
 {
@@ -12,7 +7,7 @@ namespace console
     {
         internal static Random r = new();
 
-        public static IProcessingContainer GetProcessingContainer(ApplicationParameters parameters)
+        public static IProcessingSystem GetProcessingContainer(ApplicationParameters parameters)
         {
             return new Conduit(config: new ConduitConfig()
             {
@@ -21,9 +16,20 @@ namespace console
             });
         }
 
+        /// <summary>
+        /// Load Inbound Messages Builds a set of test messages.
+        /// </summary>
+        /// <remarks>
+        /// Case 0: the default, based on appParams
+        /// Case 1: demonstrates a simple example where pod 1 finishes and starts message 4 while pods 2 and 3 are still running.
+        /// Case 1: demonstrates improvement possibilities by processing all five messages in little more than the 'longest' pole at message 3
+        /// </remarks>
+        /// <param name="inboundMessages"></param>
+        /// <param name="appParams"></param>
+        /// <param name="testcase"></param>
         public static void LoadInboundMessages(
             ref List<MessageIn> inboundMessages,
-            ApplicationParameters appParams,
+            ref ApplicationParameters appParams,
             int testcase = 0)
         {
             switch (testcase)
@@ -33,6 +39,7 @@ namespace console
                     inboundMessages.Add(new MessageIn() { Id = 2, Text = "2", ProcessingMsec = 500 });
                     inboundMessages.Add(new MessageIn() { Id = 3, Text = "3", ProcessingMsec = 1000 });
                     inboundMessages.Add(new MessageIn() { Id = 4, Text = "4", ProcessingMsec = 100 });
+                    appParams.PodCount = 3;
                     break;
                 case 2:
                     inboundMessages.Add(new MessageIn() { Id = 1, Text = "1", ProcessingMsec = 100 });
@@ -40,6 +47,7 @@ namespace console
                     inboundMessages.Add(new MessageIn() { Id = 3, Text = "3", ProcessingMsec = 1000 });
                     inboundMessages.Add(new MessageIn() { Id = 4, Text = "4", ProcessingMsec = 900 });
                     inboundMessages.Add(new MessageIn() { Id = 5, Text = "5", ProcessingMsec = 100 });
+                    appParams.PodCount = 3;
                     break;
                 default:
                     {

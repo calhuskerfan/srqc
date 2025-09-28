@@ -7,7 +7,7 @@ namespace srqc.domain
     /// The conduit manages the message processing system.
     /// </summary>
     /// <remarks></remarks>
-    public class Conduit : IProcessingContainer
+    public class Conduit : IProcessingSystem
     {
         ILogger _logger = Log.ForContext<Conduit>();
 
@@ -65,7 +65,7 @@ namespace srqc.domain
         /// 
         /// </summary>
         /// <returns></returns>
-        public bool IsConduitEmpty()
+        public bool IsSystemEmpty()
         {
             return _conduit.Count == 0;
         }
@@ -77,7 +77,7 @@ namespace srqc.domain
         /// </summary>
         private void ProcessConduitUnloadThreadFunc()
         {
-            while (_running || !IsConduitEmpty())
+            while (_running || !IsSystemEmpty())
             {
                 Pod? pod;
 
@@ -189,7 +189,7 @@ namespace srqc.domain
         /// </summary>
         /// <remarks>We still need to work out how to tell the producing system that
         /// we are no longer accepting claim check requests.</remarks>
-        public IClaimCheck WaitForStagingQueueSlotAvailable()
+        public IClaimCheck WaitForProcessingSlotAvailable()
         {
             WaitToLoadHandle.WaitOne();
             WaitToLoadHandle.Reset();

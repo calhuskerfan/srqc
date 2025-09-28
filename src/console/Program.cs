@@ -15,30 +15,34 @@ _logger.Information("Starting");
 
 ApplicationParameters appParams = new()
 {
-    PodCount = 25,
-    MessageCount = 400,
-    MinProcessingDelay = 30,
-    MaxProcessingDelay = 400,
+    PodCount = 3,
+    MessageCount = 13,
+    MinProcessingDelay = 75,
+    MaxProcessingDelay = 125,
 };
 
-var processingContainer = console.Application.GetProcessingContainer(appParams);
-
-Random r = new();
 
 // inbound and outbound message 'queues'
 List<MessageIn> inboundMessages = [];
 List<MessageOut> outboundMessages = [];
+
+
+//update to run specific scenarios.  see LoadInboundMessages for details
+int testCase = 0;
+
+console.Application.LoadInboundMessages(
+    ref inboundMessages,
+    ref appParams,
+    testCase);
+
+var processingContainer = console.Application.GetProcessingContainer(appParams);
+Random r = new();
 
 // exit handler
 processingContainer.MessageReadyAtExitEvent += (object sender, MessageReadyEventArgs e) =>
 {
     outboundMessages.Add(e.Message);
 };
-
-console.Application.LoadInboundMessages(
-    ref inboundMessages,
-    appParams,
-    0);
 
 
 // overall timer
@@ -49,7 +53,7 @@ _logger.Information("Start Loading");
 // start sending messages into the queue
 for (int i = 0; i < inboundMessages.Count; i++)
 {
-    IClaimCheck claimCheck = processingContainer.WaitForStagingQueueSlotAvailable();
+    IClaimCheck claimCheck = processingContainer.WaitForProcessingSlotAvailable();
     processingContainer.LoadMessage(claimCheck, inboundMessages[i]);
 }
 

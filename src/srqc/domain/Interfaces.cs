@@ -1,12 +1,12 @@
 ﻿namespace srqc.domain
 {
-    public interface IProcessingContainer
+    public interface IProcessingSystem
     {
         event EventHandler<MessageReadyEventArgs>? MessageReadyAtExitEvent;
-        bool IsConduitEmpty();
+        bool IsSystemEmpty();
         void LoadMessage(IClaimCheck ticket, MessageIn message);
         void Stop();
-        IClaimCheck WaitForStagingQueueSlotAvailable();
+        IClaimCheck WaitForProcessingSlotAvailable();
     }
 
     public interface IClaimCheck
