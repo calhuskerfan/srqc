@@ -18,7 +18,7 @@ ApplicationParameters appParams = new()
     PodCount = 3,
     MessageCount = 13,
     MinProcessingDelay = 75,
-    MaxProcessingDelay = 225,
+    MaxProcessingDelay = 125,
 };
 
 
