@@ -9,6 +9,12 @@
         IClaimCheck WaitForProcessingSlotAvailable();
     }
 
+    public interface IConduitConfig
+    {
+        int PodCount { get; set; }
+        bool ReUsePods { get; set; }
+    }
+
     public interface IClaimCheck
     {
         Guid Ticket { get; set; }

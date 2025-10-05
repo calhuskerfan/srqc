@@ -7,6 +7,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "srqc", "src\srqc\srqc.cspro
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "console", "src\console\console.csproj", "{1DA4CAB5-0D56-4DFC-9733-E61103496F0A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MessageChannel", "src\MessageChannel\MessageChannel.csproj", "{3D8B8518-32C2-F44B-2A0A-AF092D5CE7DF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "service", "src\service\service.csproj", "{F5FD8F75-DB5B-15BA-531E-B71CE3C47C13}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +25,14 @@ Global
 		{1DA4CAB5-0D56-4DFC-9733-E61103496F0A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1DA4CAB5-0D56-4DFC-9733-E61103496F0A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1DA4CAB5-0D56-4DFC-9733-E61103496F0A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3D8B8518-32C2-F44B-2A0A-AF092D5CE7DF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3D8B8518-32C2-F44B-2A0A-AF092D5CE7DF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3D8B8518-32C2-F44B-2A0A-AF092D5CE7DF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3D8B8518-32C2-F44B-2A0A-AF092D5CE7DF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F5FD8F75-DB5B-15BA-531E-B71CE3C47C13}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F5FD8F75-DB5B-15BA-531E-B71CE3C47C13}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F5FD8F75-DB5B-15BA-531E-B71CE3C47C13}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F5FD8F75-DB5B-15BA-531E-B71CE3C47C13}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
