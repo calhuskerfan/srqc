@@ -7,6 +7,9 @@ namespace service
 {
     public class Worker : BackgroundService
     {
+        internal static Random r = new();
+
+
         private readonly ILogger<Worker> _logger;
         private readonly IProcessingSystem _processingSystem;
 
@@ -39,6 +42,7 @@ namespace service
             {
                 IClaimCheck claimCheck = _processingSystem.WaitForProcessingSlotAvailable();
                 MessageIn mi = new() { Text = Encoding.UTF8.GetString(ea.Body) };
+                mi.ProcessingMsec = r.Next(500, 1000);
                 _logger.LogInformation(mi.ToString());
                 _processingSystem.LoadMessage(claimCheck, mi);
             };
