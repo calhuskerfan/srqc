@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 
 namespace srqc.domain
@@ -12,12 +13,12 @@ namespace srqc.domain
         ILogger<Conduit> _logger;
 
         //some internal state
-        private readonly Pod[] _pods;
-        private readonly IConduitConfig _config;
+        private readonly Pod[]? _pods;
+        private readonly ConduitConfig _config;
         bool _running = true;
 
         //is this thread safe
-        IClaimCheck _nextTicket;
+        IClaimCheck? _nextTicket;
 
         // the concurrent queue that is holding the pods as they are processing
         internal ConcurrentQueue<Pod> _conduit { get; private set; } = new ConcurrentQueue<Pod>();
@@ -43,10 +44,12 @@ namespace srqc.domain
         /// Initialze the MessageTube
         /// </summary>
         /// <param name="config"></param>
-        public Conduit(ILogger<Conduit> logger, IConduitConfig config)
+        public Conduit(
+            ILogger<Conduit> logger,
+             IOptions<ConduitConfig> options)
         {
             _logger = logger;
-            _config = config;
+            _config = options.Value;
 
             if (_config.ReUsePods)
             {

@@ -8,22 +8,14 @@ namespace service
     public class Worker : BackgroundService
     {
         private readonly ILogger<Worker> _logger;
-        private readonly IConfiguration _configuration;
-        private readonly IConduitConfig _conduitConfig;
-        private readonly ILoggerFactory _loggerFactory;
+        private readonly IProcessingSystem _processingSystem;
 
         public Worker(
             ILogger<Worker> logger,
-            IConduitConfig conduitConfig,
-            IConfiguration configuration,
-            ILoggerFactory loggerFactory)
+            IProcessingSystem processingSystem)
         {
             _logger = logger;
-            _conduitConfig = conduitConfig;
-            _configuration = configuration;
-
-            //temporary while we refactor service injection
-            _loggerFactory = loggerFactory;
+            _processingSystem = processingSystem;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -37,11 +29,7 @@ namespace service
             IChannelReader reader = ChannelFactory.GetChannelReader(JObject.Parse(readerConfig));
             IChannelWriter writer = ChannelFactory.GetChannelWriter(JObject.Parse(writerConfig));
 
-            IProcessingSystem processingContainer = new Conduit(
-                _loggerFactory.CreateLogger<Conduit>(), 
-                _conduitConfig);
-
-            processingContainer.MessageReadyAtExitEvent += (object sender, MessageReadyEventArgs e) =>
+            _processingSystem.MessageReadyAtExitEvent += (object sender, MessageReadyEventArgs e) =>
             {
                 _logger.LogInformation(e.Message.ToString());
                 writer.PublishMessage(e.Message.ToString());
@@ -49,10 +37,10 @@ namespace service
 
             reader.MessageReceived += (model, ea) =>
             {
-                IClaimCheck claimCheck = processingContainer.WaitForProcessingSlotAvailable();
+                IClaimCheck claimCheck = _processingSystem.WaitForProcessingSlotAvailable();
                 MessageIn mi = new() { Text = Encoding.UTF8.GetString(ea.Body) };
                 _logger.LogInformation(mi.ToString());
-                processingContainer.LoadMessage(claimCheck, mi);
+                _processingSystem.LoadMessage(claimCheck, mi);
             };
 
             reader.Connect();
@@ -60,6 +48,12 @@ namespace service
             _logger.LogInformation("Running");
 
             stoppingToken.WaitHandle.WaitOne();
+
+            _logger.LogInformation("Stop Processing System");
+
+            _processingSystem.Stop();
+
+            _logger.LogInformation("Done");
         }
     }
 }

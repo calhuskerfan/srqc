@@ -1,5 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Serilog;
 using service;
 using srqc.domain;
@@ -12,19 +10,17 @@ Log.Logger = new LoggerConfiguration()
 
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.Services.AddLogging(loggingBuilder => {
-    loggingBuilder.ClearProviders();
-    loggingBuilder.AddSerilog(dispose: true);
-});
+builder.Services
+    .AddLogging(loggingBuilder =>
+    {
+        loggingBuilder.ClearProviders();
+        loggingBuilder.AddSerilog(dispose: true);
+    })
+    .Configure<ConduitConfig>(builder.Configuration.GetSection("ConduitConfig"));
 
-builder.Services.AddHostedService<Worker>();
-
-builder.Services.AddTransient<IConduitConfig>(sp => { return new ConduitConfig()
-{
-    PodCount = 3,
-    ReUsePods = true,
-}; });
-
+builder.Services
+    .AddTransient<IProcessingSystem, Conduit>()
+    .AddHostedService<Worker>();
 
 var host = builder.Build();
 

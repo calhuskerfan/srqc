@@ -57,7 +57,10 @@ namespace MessageChannel.RabbitMQ
                     Password = settings.Password
                 };
 
-                ret = factory.CreateConnectionAsync().Result;
+                ret = factory
+                    .CreateConnectionAsync()
+                    .Result;
+
                 _connectionRegistry.Add(connectionRegistryKey, ret);
             }
 

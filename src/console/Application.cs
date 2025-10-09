@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using srqc;
 using srqc.domain;
 using System.Diagnostics;
@@ -8,7 +9,7 @@ namespace console
 {
     public interface IApplication
     {
-        void Go();
+        void Run();
     }
 
     public class Application : IApplication
@@ -17,29 +18,20 @@ namespace console
 
         private readonly ILogger<Application> _logger;
         private readonly IConfiguration _configuration;
-        private readonly IConduitConfig _conduitConfig;
+        private readonly ConduitConfig _conduitConfig;
         private readonly ILoggerFactory _loggerFactory;
 
         public Application(ILogger<Application> logger,
-            IConduitConfig conduitConfig,
+            IOptions<ConduitConfig> options,
             IConfiguration configuration,
             ILoggerFactory loggerFactory)
         {
             _loggerFactory = loggerFactory;
             _logger = logger;
-            _conduitConfig = conduitConfig;
+            _conduitConfig = options.Value;
             _configuration = configuration;
         }
 
-
-        //public static IProcessingSystem GetProcessingContainer(ApplicationParameters parameters)
-        //{
-        //    return new Conduit(config: new ConduitConfig()
-        //    {
-        //        PodCount = parameters.PodCount,
-        //        ReUsePods = parameters.ReUsePods,
-        //    });
-        //}
 
         /// <summary>
         /// Load Inbound Messages Builds a set of test messages.
@@ -52,37 +44,34 @@ namespace console
         /// <param name="inboundMessages"></param>
         /// <param name="appParams"></param>
         /// <param name="testcase"></param>
-        public static void LoadInboundMessages(
-            ref List<MessageIn> inboundMessages,
-            ref ApplicationParameters appParams,
-            int testcase = 0)
+        public static void LoadInboundMessages(ref ApplicationContext ctx)
         {
-            switch (testcase)
+            switch (ctx.testCase)
             {
                 case 1:
-                    inboundMessages.Add(new MessageIn() { Id = 1, Text = "1", ProcessingMsec = 100 });
-                    inboundMessages.Add(new MessageIn() { Id = 2, Text = "2", ProcessingMsec = 500 });
-                    inboundMessages.Add(new MessageIn() { Id = 3, Text = "3", ProcessingMsec = 1000 });
-                    inboundMessages.Add(new MessageIn() { Id = 4, Text = "4", ProcessingMsec = 100 });
-                    appParams.PodCount = 3;
+                    ctx.inboundMessages.Add(new MessageIn() { Id = 1, Text = "1", ProcessingMsec = 100 });
+                    ctx.inboundMessages.Add(new MessageIn() { Id = 2, Text = "2", ProcessingMsec = 500 });
+                    ctx.inboundMessages.Add(new MessageIn() { Id = 3, Text = "3", ProcessingMsec = 1000 });
+                    ctx.inboundMessages.Add(new MessageIn() { Id = 4, Text = "4", ProcessingMsec = 100 });
+                    ctx.appParams.PodCount = 3;
                     break;
                 case 2:
-                    inboundMessages.Add(new MessageIn() { Id = 1, Text = "1", ProcessingMsec = 100 });
-                    inboundMessages.Add(new MessageIn() { Id = 2, Text = "2", ProcessingMsec = 700 });
-                    inboundMessages.Add(new MessageIn() { Id = 3, Text = "3", ProcessingMsec = 1000 });
-                    inboundMessages.Add(new MessageIn() { Id = 4, Text = "4", ProcessingMsec = 900 });
-                    inboundMessages.Add(new MessageIn() { Id = 5, Text = "5", ProcessingMsec = 100 });
-                    appParams.PodCount = 3;
+                    ctx.inboundMessages.Add(new MessageIn() { Id = 1, Text = "1", ProcessingMsec = 100 });
+                    ctx.inboundMessages.Add(new MessageIn() { Id = 2, Text = "2", ProcessingMsec = 700 });
+                    ctx.inboundMessages.Add(new MessageIn() { Id = 3, Text = "3", ProcessingMsec = 1000 });
+                    ctx.inboundMessages.Add(new MessageIn() { Id = 4, Text = "4", ProcessingMsec = 900 });
+                    ctx.inboundMessages.Add(new MessageIn() { Id = 5, Text = "5", ProcessingMsec = 100 });
+                    ctx.appParams.PodCount = 3;
                     break;
                 default:
                     {
-                        for (int i = 1; i < appParams.MessageCount + 1; i++)
+                        for (int i = 1; i < ctx.appParams.MessageCount + 1; i++)
                         {
-                            inboundMessages.Add(new MessageIn()
+                            ctx.inboundMessages.Add(new MessageIn()
                             {
                                 Id = i,
                                 Text = i.ToString(),
-                                ProcessingMsec = r.Next(appParams.MinProcessingDelay, appParams.MaxProcessingDelay)
+                                ProcessingMsec = r.Next(ctx.appParams.MinProcessingDelay, ctx.appParams.MaxProcessingDelay)
                             });
                         }
                     }
@@ -90,7 +79,7 @@ namespace console
             }
         }
 
-        public void Go()
+        public void Run()
         {
             _logger.LogInformation("GO");
 
@@ -103,16 +92,14 @@ namespace console
                 appParams = new()
                 {
                     PodCount = 3,
-                    MessageCount = 13,
-                    MinProcessingDelay = 75,
-                    MaxProcessingDelay = 125,
-                }
+                    MessageCount = 130,
+                    MinProcessingDelay = Convert.ToInt32(_configuration["AppSettings:MinProcessingDelay"]),
+                    MaxProcessingDelay = Convert.ToInt32(_configuration["AppSettings:MaxProcessingDelay"]),
+                },
+                testCase = Convert.ToInt32(_configuration["AppSettings:TestCase"])
             };
 
-            console.Application.LoadInboundMessages(
-                ref ctx.inboundMessages,
-                ref ctx.appParams,
-                ctx.testCase);
+            console.Application.LoadInboundMessages(ref ctx);
 
             IProcessingSystem processingContainer = new Conduit(
                 _loggerFactory.CreateLogger<Conduit>(),
@@ -135,15 +122,13 @@ namespace console
 
             processingContainer.Stop();
 
-            // set logindividual to true if you not want to see all the message results at the end
-            ctx.RunQualityCheck(logindividual: true);
-
-
             _logger.LogInformation("Done Loading");
 
             totalProcessingTime.Stop();
 
             _logger.LogInformation("Container Finished Processing");
+
+            ctx.RunQualityCheck(logindividual: true);
 
             _logger.LogInformation($"Total processing time: {totalProcessingTime.Elapsed.TotalMilliseconds} msec.  Accumulated 'Serial' Time: {ctx.accumulatedMsec} msec.  Ratio: {ctx.accumulatedMsec / totalProcessingTime.Elapsed.TotalMilliseconds}");
         }

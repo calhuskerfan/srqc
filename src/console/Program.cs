@@ -16,69 +16,21 @@ Log.Logger = new LoggerConfiguration()
 
 var builder = Host.CreateApplicationBuilder(args);
 
-
-Serilog.ILogger _logger = Log.Logger;
-
-
-builder.Services.AddLogging(loggingBuilder => {
-    loggingBuilder.ClearProviders();
-    loggingBuilder.AddSerilog(dispose: true);
-});
-
-builder.Services.AddSingleton<IApplication, Application>();
-
-builder.Services.AddTransient<IConduitConfig>(sp => {
-    return new ConduitConfig()
+builder.Services
+    .AddLogging(loggingBuilder =>
     {
-        PodCount = 3,
-        ReUsePods = true,
-    };
-});
-
-
-var host = builder.Build();
-
-
-
-/*
-IConfiguration configuration = new ConfigurationBuilder().SetBasePath(AppContext.BaseDirectory)
-.AddJsonFile("appsettings.json", optional: false)
-.Build();
-
-var serviceProvider = new ServiceCollection()
-    .AddLogging(options =>
-    {
-        options.ClearProviders();
-        options.AddSerilog(dispose: true);
+        loggingBuilder.ClearProviders();
+        loggingBuilder.AddSerilog(dispose: true);
     })
-    .AddTransient<IConduitConfig, ConduitConfig>()
-    .AddTransient<IConfiguration>(sp => {
-        return new ConfigurationBuilder().SetBasePath(AppContext.BaseDirectory)
-        .AddJsonFile("appsettings.json", optional: false)
-        .Build();
-    })
-    .AddTransient<ILoggerFactory>(sp => {
+    .Configure<ConduitConfig>(builder.Configuration.GetSection("ConduitConfig"))
+    .AddSingleton<IApplication, Application>();
 
-        return LoggerFactory.Create(builder =>
-        {
-            builder.AddConsole();
-            builder.AddDebug();
-        });
-    }
+//package it all up and go
 
-    )
-    .AddSingleton<IApplication, Application>()
-    .BuildServiceProvider();
-*/
-
-_logger.Information("Starting");
-
-
-// overall timer
-
-
-IApplication app = host.Services.GetRequiredService<IApplication>();
-app.Go();
+builder.Build()
+    .Services
+    .GetRequiredService<IApplication>()
+    .Run();
 
 
 
