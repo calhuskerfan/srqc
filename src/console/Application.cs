@@ -1,20 +1,45 @@
-﻿using srqc;
+﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using srqc;
 using srqc.domain;
+using System.Diagnostics;
 
 namespace console
 {
-    public class Application
+    public interface IApplication
+    {
+        void Go();
+    }
+
+    public class Application : IApplication
     {
         internal static Random r = new();
 
-        public static IProcessingSystem GetProcessingContainer(ApplicationParameters parameters)
+        private readonly ILogger<Application> _logger;
+        private readonly IConfiguration _configuration;
+        private readonly IConduitConfig _conduitConfig;
+        private readonly ILoggerFactory _loggerFactory;
+
+        public Application(ILogger<Application> logger,
+            IConduitConfig conduitConfig,
+            IConfiguration configuration,
+            ILoggerFactory loggerFactory)
         {
-            return new Conduit(config: new ConduitConfig()
-            {
-                PodCount = parameters.PodCount,
-                ReUsePods = parameters.ReUsePods,
-            });
+            _loggerFactory = loggerFactory;
+            _logger = logger;
+            _conduitConfig = conduitConfig;
+            _configuration = configuration;
         }
+
+
+        //public static IProcessingSystem GetProcessingContainer(ApplicationParameters parameters)
+        //{
+        //    return new Conduit(config: new ConduitConfig()
+        //    {
+        //        PodCount = parameters.PodCount,
+        //        ReUsePods = parameters.ReUsePods,
+        //    });
+        //}
 
         /// <summary>
         /// Load Inbound Messages Builds a set of test messages.
@@ -63,6 +88,64 @@ namespace console
                     }
                     break;
             }
+        }
+
+        public void Go()
+        {
+            _logger.LogInformation("GO");
+
+            Stopwatch totalProcessingTime = Stopwatch.StartNew();
+
+            _logger.LogInformation("Start Loading");
+
+            ApplicationContext ctx = new ApplicationContext
+            {
+                appParams = new()
+                {
+                    PodCount = 3,
+                    MessageCount = 13,
+                    MinProcessingDelay = 75,
+                    MaxProcessingDelay = 125,
+                }
+            };
+
+            console.Application.LoadInboundMessages(
+                ref ctx.inboundMessages,
+                ref ctx.appParams,
+                ctx.testCase);
+
+            IProcessingSystem processingContainer = new Conduit(
+                _loggerFactory.CreateLogger<Conduit>(),
+                _conduitConfig);
+
+
+
+            processingContainer.MessageReadyAtExitEvent += (object sender, MessageReadyEventArgs e) =>
+            {
+                ctx.outboundMessages.Add(e.Message);
+            };
+
+
+            // start sending messages into the queue
+            for (int i = 0; i < ctx.inboundMessages.Count; i++)
+            {
+                IClaimCheck claimCheck = processingContainer.WaitForProcessingSlotAvailable();
+                processingContainer.LoadMessage(claimCheck, ctx.inboundMessages[i]);
+            }
+
+            processingContainer.Stop();
+
+            // set logindividual to true if you not want to see all the message results at the end
+            ctx.RunQualityCheck(logindividual: true);
+
+
+            _logger.LogInformation("Done Loading");
+
+            totalProcessingTime.Stop();
+
+            _logger.LogInformation("Container Finished Processing");
+
+            _logger.LogInformation($"Total processing time: {totalProcessingTime.Elapsed.TotalMilliseconds} msec.  Accumulated 'Serial' Time: {ctx.accumulatedMsec} msec.  Ratio: {ctx.accumulatedMsec / totalProcessingTime.Elapsed.TotalMilliseconds}");
         }
     }
 }
