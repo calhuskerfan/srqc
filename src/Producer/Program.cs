@@ -1,11 +1,11 @@
 ﻿using Producer;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Serilog;
 
 Log.Logger = new LoggerConfiguration()
+  .Enrich.WithThreadId()
   .WriteTo.Console(outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {ThreadId,3} {Message:lj}{NewLine}{Exception}")
   .MinimumLevel.Debug()
   .CreateLogger();
@@ -21,7 +21,7 @@ builder.Services
     .AddSingleton<IApplication, Application>();
 
 
-builder.Build()
+await builder.Build()
     .Services
     .GetRequiredService<IApplication>()
-    .Run();
+    .RunAsync();

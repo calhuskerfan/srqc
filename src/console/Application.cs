@@ -1,8 +1,7 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using srqc;
-using srqc.domain;
+using Srqc;
 using System.Diagnostics;
 
 namespace console
@@ -12,6 +11,8 @@ namespace console
         void Run();
     }
 
+#pragma warning disable CS8622
+
     public class Application : IApplication
     {
         internal static Random r = new();
@@ -20,16 +21,20 @@ namespace console
         private readonly IConfiguration _configuration;
         private readonly ConduitConfig _conduitConfig;
         private readonly ILoggerFactory _loggerFactory;
+        private readonly IProcessingSystem _processingSystem;
+
 
         public Application(ILogger<Application> logger,
             IOptions<ConduitConfig> options,
             IConfiguration configuration,
-            ILoggerFactory loggerFactory)
+            ILoggerFactory loggerFactory,
+            IProcessingSystem processingSystem)
         {
             _loggerFactory = loggerFactory;
             _logger = logger;
             _conduitConfig = options.Value;
             _configuration = configuration;
+            _processingSystem = processingSystem;
         }
 
 
@@ -43,17 +48,16 @@ namespace console
         /// </remarks>
         /// <param name="inboundMessages"></param>
         /// <param name="appParams"></param>
-        /// <param name="testcase"></param>
-        public static void LoadInboundMessages(ref ApplicationContext ctx)
+        /// <param name="TestScenario"></param>
+        public static void CreateInboundMessages(ref ApplicationContext ctx)
         {
-            switch (ctx.testCase)
+            switch (ctx.appParams.TestScenario)
             {
                 case 1:
                     ctx.inboundMessages.Add(new MessageIn() { Id = 1, Text = "1", ProcessingMsec = 100 });
                     ctx.inboundMessages.Add(new MessageIn() { Id = 2, Text = "2", ProcessingMsec = 500 });
                     ctx.inboundMessages.Add(new MessageIn() { Id = 3, Text = "3", ProcessingMsec = 1000 });
                     ctx.inboundMessages.Add(new MessageIn() { Id = 4, Text = "4", ProcessingMsec = 100 });
-                    ctx.appParams.PodCount = 3;
                     break;
                 case 2:
                     ctx.inboundMessages.Add(new MessageIn() { Id = 1, Text = "1", ProcessingMsec = 100 });
@@ -61,7 +65,6 @@ namespace console
                     ctx.inboundMessages.Add(new MessageIn() { Id = 3, Text = "3", ProcessingMsec = 1000 });
                     ctx.inboundMessages.Add(new MessageIn() { Id = 4, Text = "4", ProcessingMsec = 900 });
                     ctx.inboundMessages.Add(new MessageIn() { Id = 5, Text = "5", ProcessingMsec = 100 });
-                    ctx.appParams.PodCount = 3;
                     break;
                 default:
                     {
@@ -79,58 +82,55 @@ namespace console
             }
         }
 
+        /// <summary>
+        /// Runs the application
+        /// </summary>
         public void Run()
         {
-            _logger.LogInformation("GO");
+            _logger.LogInformation("Run Application");
 
             Stopwatch totalProcessingTime = Stopwatch.StartNew();
 
-            _logger.LogInformation("Start Loading");
+            _logger.LogDebug("Start Loading");
 
             ApplicationContext ctx = new ApplicationContext
             {
                 appParams = new()
                 {
-                    PodCount = 3,
-                    MessageCount = 130,
+                    MessageCount = Convert.ToInt32(_configuration["AppSettings:MessageCount"]),
                     MinProcessingDelay = Convert.ToInt32(_configuration["AppSettings:MinProcessingDelay"]),
                     MaxProcessingDelay = Convert.ToInt32(_configuration["AppSettings:MaxProcessingDelay"]),
-                },
-                testCase = Convert.ToInt32(_configuration["AppSettings:TestCase"])
+                    TestScenario = Convert.ToInt32(_configuration["AppSettings:TestScenario"])
+                }
             };
 
-            console.Application.LoadInboundMessages(ref ctx);
+            console.Application.CreateInboundMessages(ref ctx);
 
-            IProcessingSystem processingContainer = new Conduit(
-                _loggerFactory.CreateLogger<Conduit>(),
-                _conduitConfig);
-
-
-
-            processingContainer.MessageReadyAtExitEvent += (object sender, MessageReadyEventArgs e) =>
+            // register for messages ready at exit
+            _processingSystem.MessageReadyAtExitEvent += (object sender, MessageReadyEventArgs e) =>
             {
                 ctx.outboundMessages.Add(e.Message);
             };
 
-
-            // start sending messages into the queue
+            // send messages into processing system
             for (int i = 0; i < ctx.inboundMessages.Count; i++)
             {
-                IClaimCheck claimCheck = processingContainer.WaitForProcessingSlotAvailable();
-                processingContainer.LoadMessage(claimCheck, ctx.inboundMessages[i]);
+                IClaimCheck claimCheck = _processingSystem.WaitForProcessingSlotAvailable();
+                _processingSystem.LoadMessage(claimCheck, ctx.inboundMessages[i]);
             }
 
-            processingContainer.Stop();
+            _logger.LogDebug("Loading Completed");
 
-            _logger.LogInformation("Done Loading");
+            _processingSystem.Stop();
 
             totalProcessingTime.Stop();
 
             _logger.LogInformation("Container Finished Processing");
 
-            ctx.RunQualityCheck(logindividual: true);
+            ctx.RunQualityCheck(_conduitConfig.PodCount, logindividual: true);
 
-            _logger.LogInformation($"Total processing time: {totalProcessingTime.Elapsed.TotalMilliseconds} msec.  Accumulated 'Serial' Time: {ctx.accumulatedMsec} msec.  Ratio: {ctx.accumulatedMsec / totalProcessingTime.Elapsed.TotalMilliseconds}");
+            _logger.LogInformation($"Total processing time: {totalProcessingTime.Elapsed.TotalMilliseconds} msec.  Accumulated 'Serial' Time: {ctx.AccumulatedMsec} msec.  Ratio: {ctx.AccumulatedMsec / totalProcessingTime.Elapsed.TotalMilliseconds}");
         }
     }
+#pragma warning restore CS8622
 }

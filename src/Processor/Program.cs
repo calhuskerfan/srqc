@@ -1,8 +1,5 @@
-﻿using console;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Serilog;
+using Processor;
 using Srqc;
 
 Log.Logger = new LoggerConfiguration()
@@ -19,18 +16,13 @@ builder.Services
         loggingBuilder.ClearProviders();
         loggingBuilder.AddSerilog(dispose: true);
     })
-    .Configure<ConduitConfig>(builder.Configuration.GetSection("ConduitConfig"))
+    .Configure<ConduitConfig>(builder.Configuration.GetSection("ConduitConfig"));
+
+builder.Services
     .AddTransient<IProcessingSystem, Conduit>()
-    .AddSingleton<IApplication, Application>();
+    .AddTransient<IWorkerContext, WorkerContext>()
+    .AddHostedService<Worker>();
 
-builder.Build()
-    .Services
-    .GetRequiredService<IApplication>()
-    .Run();
+var host = builder.Build();
 
-
-
-
-
-
-
+await host.RunAsync();

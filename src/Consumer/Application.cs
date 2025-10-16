@@ -1,31 +1,47 @@
-﻿using MessageChannel;
+﻿using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
+using Newtonsoft.Json;
+using Microsoft.Extensions.Configuration;
+using Srqc;
+using Srqc.MessageChannel;
+
 
 namespace Consumer
 {
     public interface IApplication
     {
-        void Run();
+        Task RunAsync();
     }
+
+#pragma warning disable CS8600
+#pragma warning disable CS8602
 
     public class Application : IApplication
     {
         private readonly ILogger<Application> _logger;
+        private readonly IConfiguration _configuration;
 
-        public Application(ILogger<Application> logger)
+        //turn these into configurations
+        private readonly ChannelReader _channelReader;
+
+        public Application(ILogger<Application> logger,
+            IConfiguration configuration)
         {
             _logger = logger;
+            _configuration = configuration;
+
+            _channelReader = new ChannelReader() { 
+                ChannelName = _configuration["AppSettings:OutQueue"].ToString() 
+            };
         }
 
-        public void Run() {
+        public async Task RunAsync()
+        {
+            int lastId = -1;
 
-            _logger.LogInformation("GO");
+            _logger.LogInformation("Application - RunAsync");
 
             var exitEvent = new ManualResetEvent(false);
 
@@ -34,22 +50,48 @@ namespace Consumer
                 exitEvent.Set();
             };
 
-            string readerConfig = @"{'channelType': 'rabbit','properties':{'queueName':'out-queue'}}";
+            var factory = new ConnectionFactory { HostName = "localhost" };
+            using var connection = await factory.CreateConnectionAsync();
+            using var channel = await connection.CreateChannelAsync();
 
-            IChannelReader reader = ChannelFactory.GetChannelReader(JObject.Parse(readerConfig));
+            await channel.QueueDeclareAsync(
+                queue: _channelReader.ChannelName, 
+                durable: true, 
+                exclusive: false, 
+                autoDelete: false, 
+                arguments: null);
 
-            reader.MessageReceived += (model, ea) =>
+            var consumer = new AsyncEventingBasicConsumer(channel);
+
+            consumer.ReceivedAsync += (model, ea) =>
             {
-                _logger.LogInformation(Encoding.UTF8.GetString(ea.Body));
+                MessageOut messgeOut = JsonConvert.DeserializeObject<MessageOut>(Encoding.UTF8.GetString(ea.Body.ToArray()));
+
+                if (messgeOut.MessageInId != 0 
+                    && messgeOut.MessageInId != lastId + 1)
+                {
+                    _logger.LogError("Oh shit");
+                }
+
+                lastId  = messgeOut.MessageInId;
+
+                _logger.LogDebug("Message Id: {messageId}", messgeOut.MessageInId);
+
+                return Task.CompletedTask;
             };
 
-            reader.Connect();
+            await channel.BasicConsumeAsync(
+                _configuration["AppSettings:OutQueue"].ToString(), 
+                autoAck: true,
+                consumer: consumer);
 
             _logger.LogInformation("Connected Ctrl+C to exit");
 
             exitEvent.WaitOne();
 
-            reader.CloseConnection();
+            return;
         }
     }
+#pragma warning restore CS8602
+#pragma warning restore CS8600
 }
