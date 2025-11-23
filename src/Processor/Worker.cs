@@ -3,6 +3,7 @@ using RabbitMQ.Client.Events;
 using Newtonsoft.Json;
 using System.Text;
 using Srqc;
+using Srqc.MessageChannel;
 
 namespace Processor
 {
@@ -19,12 +20,8 @@ namespace Processor
         private readonly IConfiguration _configuration;
         private readonly IWorkerContext _context;
 
-        private readonly string _outQueueName;
-        private readonly string _outQueueRoutingKey;
-        private readonly string _inQueueName;
-
-        //turn these into configurations
-        private readonly ushort _prefetchCount = 3;
+        private readonly ChannelReader _channelReader;
+        private readonly ChannelWriter _channelWriter;
 
         public Worker(
             ILogger<Worker> logger,
@@ -36,9 +33,17 @@ namespace Processor
             _processingSystem = processingSystem;
             _configuration = configuration;
             _context = context;
-            _inQueueName = _configuration["AppSettings:InQueue"].ToString();
-            _outQueueName = _configuration["AppSettings:OutQueue"].ToString();
-            _outQueueRoutingKey = _configuration["AppSettings:OutQueue"].ToString();
+
+            _channelReader = new ChannelReader()
+            {
+                ChannelName = _configuration["InboundChannel:Name"].ToString(),
+                PrefetchCount = Convert.ToUInt16(_configuration["InboundChannel:PrefetchCount"]),
+            };
+
+            _channelWriter = new ChannelWriter()
+            {
+                ChannelName = _configuration["OutboundChannel:Name"].ToString()
+            };
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -51,7 +56,7 @@ namespace Processor
             using var sendChannel = await sendConnection.CreateChannelAsync();
 
             await sendChannel.QueueDeclareAsync(
-                queue: _outQueueName,
+                queue: _channelWriter.ChannelName,
                 durable: true,
                 exclusive: false,
                 autoDelete: false,
@@ -65,7 +70,7 @@ namespace Processor
 
                 sendChannel.BasicPublishAsync(
                     exchange: string.Empty,
-                    routingKey: _outQueueRoutingKey,
+                    routingKey: _channelWriter.ChannelName,
                     body: body)
                 .GetAwaiter()
                 .GetResult();
@@ -75,13 +80,13 @@ namespace Processor
             using var channel = await connection.CreateChannelAsync();
 
             await channel.QueueDeclareAsync(
-                queue: _inQueueName,
+                queue: _channelReader.ChannelName,
                 durable: true,
                 exclusive: false,
                 autoDelete: false,
                 arguments: null);
 
-            await channel.BasicQosAsync(0, _prefetchCount, false);
+            await channel.BasicQosAsync(0, _channelReader.PrefetchCount, false);
 
             var consumer = new AsyncEventingBasicConsumer(channel);
 
@@ -100,7 +105,7 @@ namespace Processor
             };
 
             await channel.BasicConsumeAsync(
-                _inQueueName,
+                _channelReader.ChannelName,
                 autoAck: false,
                 consumer: consumer);
 
@@ -120,3 +125,4 @@ namespace Processor
 #pragma warning restore CS8602
 #pragma warning restore CS8600
 }
+

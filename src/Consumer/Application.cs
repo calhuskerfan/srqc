@@ -23,7 +23,6 @@ namespace Consumer
         private readonly ILogger<Application> _logger;
         private readonly IConfiguration _configuration;
 
-        //turn these into configurations
         private readonly ChannelReader _channelReader;
 
         public Application(ILogger<Application> logger,
@@ -33,7 +32,8 @@ namespace Consumer
             _configuration = configuration;
 
             _channelReader = new ChannelReader() { 
-                ChannelName = _configuration["AppSettings:OutQueue"].ToString() 
+                ChannelName = _configuration["InboundChannel:Name"].ToString() ,
+                PrefetchCount = Convert.ToUInt16(_configuration["InboundChannel:PrefetchCount"]),
             };
         }
 

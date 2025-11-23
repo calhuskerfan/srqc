@@ -1,12 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Srqc.MessageChannel
+﻿namespace Srqc.MessageChannel
 {
-    public class ChannelWriter : ChannelBase
+    public class ChannelWriter : ChannelBase, IChannelWriter
     {
     }
 }

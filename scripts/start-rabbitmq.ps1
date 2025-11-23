@@ -26,7 +26,6 @@ else {
 }
 
 if($launchBrowser) {
-    #Start-Process "http://localhost:15672/#/queues"
     Start-Process "http://localhost:15672"
     Write-Host "Launched RabbitMQ Management UI in browser."
 }

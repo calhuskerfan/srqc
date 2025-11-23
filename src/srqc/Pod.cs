@@ -107,21 +107,28 @@ namespace Srqc
         //
         public int GetMessageId()
         {
-            if (_message == null)
-            {
-                return 0;
-            }
-
-            return _message.MessageInId;
+            return _message == null ? 0 : _message.MessageInId;
         }
 
-        // TODO come back to this
-        // what I actually want to return here is a copy of the message and
-        // then set internal copy to null
+
+        /// <summary>
+        /// Unlpoad the processed message from the pod.
+        /// </summary>
+        /// <returns></returns>
         public MessageOut? Unload()
         {
+            if (_message == null)
+            {
+                _logger.Warning("Pod {idx} has no message to unload", Idx);
+                State = PodState.WaitingToLoad;
+                return null;
+            }
+
+            MessageOut ret = _message.Clone();
+            _message = null;
+
             State = PodState.WaitingToLoad;
-            return _message;
+            return ret;
         }
 
         // 

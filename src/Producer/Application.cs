@@ -31,7 +31,7 @@ namespace Producer
             //move this to DI
             _channelWriter = new ChannelWriter()
             {
-                ChannelName = _configuration["AppSettings:InQueue"].ToString()
+                ChannelName = _configuration["OutboundChannel:Name"].ToString()
             };
         }
 
@@ -59,7 +59,7 @@ namespace Producer
 
                 await sendChannel.BasicPublishAsync(
                     string.Empty,
-                    _configuration["AppSettings:InQueue"].ToString(),
+                    _channelWriter.ChannelName,
                     body);
             }
 

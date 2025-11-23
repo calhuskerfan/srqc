@@ -13,11 +13,12 @@ namespace Srqc
     /// <remarks></remarks>
     public class Conduit : IProcessingSystem
     {
-        ILogger<Conduit> _logger;
+        private readonly ILogger<Conduit> _logger;
+        private readonly ConduitConfig _config;
 
         //some internal state
         private readonly Pod[]? _pods;
-        private readonly ConduitConfig _config;
+
         bool _running = true;
 
         //is this thread safe
@@ -34,9 +35,8 @@ namespace Srqc
         if we are reusing pods this queue will keep
         track of pods that are available to pick up a new message
         */
-        internal ConcurrentQueue<int> WaitingToProcess = new ConcurrentQueue<int> { };
+        internal ConcurrentQueue<int> PodsAvailableForProcessing = new ConcurrentQueue<int> { };
 
-        // The Thread that is unloading the messages
         internal Thread _unloadProcessingThread { get; set; }
 
         // shutdown is used to safely process any inflight messages.
@@ -44,7 +44,7 @@ namespace Srqc
 
 
         /// <summary>
-        /// Initialze the MessageTube
+        /// Initialze the Conduit
         /// </summary>
         /// <param name="config"></param>
         public Conduit(
@@ -61,7 +61,7 @@ namespace Srqc
                 for (int i = 0; i < _config.PodCount; i++)
                 {
                     _pods[i] = new Pod(i);
-                    WaitingToProcess.Enqueue(i);
+                    PodsAvailableForProcessing.Enqueue(i);
                 }
             }
 
@@ -70,7 +70,7 @@ namespace Srqc
         }
 
         /// <summary>
-        /// 
+        /// returns true if there are no pods in the conduit
         /// </summary>
         /// <returns></returns>
         public bool IsSystemEmpty()
@@ -80,8 +80,8 @@ namespace Srqc
 
 
         /// <summary>
-        /// The ProcessConduitUnloadThreadFunc is responsible for processing the Pod at the exit of
-        /// conduit.
+        /// The ProcessConduitUnloadThreadFunc is responsible for processing the Pod
+        /// at the exit of conduit.
         /// </summary>
         private void ProcessConduitUnloadThreadFunc()
         {
@@ -98,6 +98,7 @@ namespace Srqc
                     _logger.LogInformation(
                         "Pod {idx:D3}: Message {id:D4} completed in {msec}", pod.Idx, pod.GetMessageId(), pod.LastExecutionTime.TotalMilliseconds);
 
+
                     //fire the event that message has been completed
                     OnMessageReady(new MessageReadyEventArgs()
                     {
@@ -106,7 +107,7 @@ namespace Srqc
 
                     if (_config.ReUsePods)
                     {
-                        WaitingToProcess.Enqueue(pod.Idx);
+                        PodsAvailableForProcessing.Enqueue(pod.Idx);
                     }
 
                     WaitToLoadHandle.Set();
@@ -151,7 +152,7 @@ namespace Srqc
 
             if (_config.ReUsePods)
             {
-                if (WaitingToProcess.TryDequeue(out int nextPod))
+                if (PodsAvailableForProcessing.TryDequeue(out int nextPod))
                 {
                     _logger.LogDebug($"LoadMessage: nextpod up: {nextPod}");
                     p = _pods[nextPod];
@@ -193,11 +194,13 @@ namespace Srqc
         }
 
         /// <summary>
-        /// WaitForStagingQueueSlotAvailable is called by the message producer queue handler
+        /// WaitForProcessingSlotAvailable is called by the message producer queue handler
         /// to verify that there is a spot in the staging queue.
         /// </summary>
-        /// <remarks>We still need to work out how to tell the producing system that
-        /// we are no longer accepting claim check requests.</remarks>
+        /// <remarks>
+        /// We still need to work out how to tell the producing system that
+        /// we are no longer accepting claim check requests.
+        /// </remarks>
         public IClaimCheck WaitForProcessingSlotAvailable()
         {
             WaitToLoadHandle.WaitOne();
@@ -207,14 +210,14 @@ namespace Srqc
         }
 
         /// <summary>
-        /// ReadyToLoad
+        /// True if there are pods available to load
         /// </summary>
         /// <returns></returns>
         private bool ReadyToLoad()
         {
             if (_config.ReUsePods)
             {
-                return !WaitingToProcess.IsEmpty;
+                return !PodsAvailableForProcessing.IsEmpty;
             }
             else
             {
@@ -224,7 +227,7 @@ namespace Srqc
         }
 
         /// <summary>
-        /// ReadyToLoad
+        /// OnMessageReady
         /// </summary>
         /// <param name="e"></param>
         protected virtual void OnMessageReady(MessageReadyEventArgs e)

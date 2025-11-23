@@ -32,17 +32,21 @@ docker pull rabbitmq:4-management
 .\start-all.ps1
 ```
 `start-all.ps1` will:
-1. start the rabbitmq container
-1. launch a browser pointed to localhost:http://localhost:15672/
-1. start the processing hosted service in a terminal window
-1. start the consuming holsted service in a terminal window
+1. start the RabbitMQ image in a container.
+1. launch a browser pointed to localhost at http://localhost:15672/.
+1. start the processing hosted service in a terminal window.
+1. start the consuming holsted service in a terminal window.
 1. start the producing application in a terminal window.
 
-The producing application will shut down once it has sent its prescribed message count.  The processing and consuming services will remain running until the user closes them down.
+The producing application will shut down once it has sent its prescribed message count.  The processing and consuming services will remain running until the user closes them.
 
 ## Details and Other Execution options
 
+The demonstration system is made of four primary components, each is described below.
+
 ### RabbitMQ running as a docker container
+
+the RabbitMQ container serves as the message broker to connect the producer to the processor and the processor to the consumer.
 
 ```ps
 docker run `
@@ -53,19 +57,20 @@ docker run `
     rabbitmq:4-management
 ```
 
-[rabbit mq](http://localhost:15672/).  login should be guest/guest
+http://localhost:15672/.  login should be guest/guest
 
-### IHostedService application to process messages
+### IHostedService application to Process messages
 
-Open A New Terminal Window (or Tab)
+Process messages from the inbound queue
 
 ```ps1
   # from the ./src/Service directory
   dotnet run -c Release
 ```
+
 ### IHostedService application to Consume messages
 
-Open A New Terminal Window (or Tab)
+Consumes messages produced by the processor.
 
 ```ps1
   # from the ./src/Consumer directory
@@ -74,7 +79,7 @@ Open A New Terminal Window (or Tab)
 
 ### Console application to Produce messages
 
-Open A New Terminal Window (or Tab)
+Produces message for the processor to transform.
 
 ```ps1
   # from the ./src/Producer directory
