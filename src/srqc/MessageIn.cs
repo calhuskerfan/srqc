@@ -1,4 +1,4 @@
-﻿namespace srqc.domain
+﻿namespace Srqc
 {
     public class MessageIn
     {

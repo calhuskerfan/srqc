@@ -1,7 +1,7 @@
 ﻿using Serilog;
 using System.Diagnostics;
 
-namespace srqc.domain
+namespace Srqc
 {
     public enum PodState : int
     {
@@ -16,9 +16,9 @@ namespace srqc.domain
         Undefined
     }
 
-    public class Pod
+    public class Pod : IProcessingContainer
     {
-        ILogger _logger = Log.ForContext<Pod>();
+        readonly ILogger _logger = Log.ForContext<Pod>();
 
         public Guid Id { get; } = Guid.NewGuid();
 
@@ -35,14 +35,14 @@ namespace srqc.domain
             set
             {
                 // volatile should suffice, but leave for now.
-                System.Threading.Interlocked.Exchange(ref _podstate, (int)value);
+                Interlocked.Exchange(ref _podstate, (int)value);
             }
         }
 
         // internal members
         private MessageOut? _message = null;
 
-        private EventWaitHandle ProcessingCompleteHandle = new EventWaitHandle(true, EventResetMode.ManualReset);
+        private EventWaitHandle ProcessingCompleteHandle = new(true, EventResetMode.ManualReset);
 
         public Pod(int idx)
         {
@@ -55,7 +55,7 @@ namespace srqc.domain
         {
             if (State != PodState.WaitingToLoad)
             {
-                throw new InvalidOperationException($"pod {Idx} is in state {State}");
+                throw new InvalidOperationException($"Pod {Idx} is in State {State}");
             }
 
             State = PodState.Loading;
@@ -64,7 +64,6 @@ namespace srqc.domain
             ProcessingThread.Start();
         }
 
-        //
         internal void ProcessThreadFunc(MessageIn msg)
         {
             ProcessingCompleteHandle.Reset();
@@ -77,12 +76,12 @@ namespace srqc.domain
 
             if (_logger.IsEnabled(Serilog.Events.LogEventLevel.Debug))
             {
-                _logger.Debug("ProcessThreadFunc in pod {idx} has started for message {id} with delay of {msec}", Idx, msg.Id, msg.ProcessingMsec);
+                _logger.Debug("ProcessThreadFunc in Pod {idx} has started for message {id} with delay of {msec}", Idx, msg.Id, msg.ProcessingMsec);
             }
 
             _message = new MessageOut()
             {
-                Text = $"New outbound message is: {msg.Text} from pod {this.Id}",
+                Text = $"New outbound message is: {msg.Text} from pod {Id}",
                 Id = msg.Id + 10000,
                 MessageInId = msg.Id,
                 RuntimeMsec = msg.ProcessingMsec,
@@ -94,7 +93,10 @@ namespace srqc.domain
 
             State = PodState.ReadyToUnload;
 
-            _logger.Information("pod {idx} ProcessThreadFunc has Completed {state}", Idx, State);
+            if (_logger.IsEnabled(Serilog.Events.LogEventLevel.Debug))
+            {
+                _logger.Debug("Pod {idx:D3} ProcessThreadFunc has Completed {state}", Idx, State);
+            }
 
             sw.Stop();
             LastExecutionTime = sw.Elapsed;
@@ -105,21 +107,28 @@ namespace srqc.domain
         //
         public int GetMessageId()
         {
-            if (this._message == null)
-            {
-                return 0;
-            }
-
-            return this._message.MessageInId;
+            return _message == null ? 0 : _message.MessageInId;
         }
 
-        // TODO come back to this
-        // what I actually want to return here is a copy of the message and
-        // then set internal copy to null
+
+        /// <summary>
+        /// Unlpoad the processed message from the pod.
+        /// </summary>
+        /// <returns></returns>
         public MessageOut? Unload()
         {
+            if (_message == null)
+            {
+                _logger.Warning("Pod {idx} has no message to unload", Idx);
+                State = PodState.WaitingToLoad;
+                return null;
+            }
+
+            MessageOut ret = _message.Clone();
+            _message = null;
+
             State = PodState.WaitingToLoad;
-            return this._message;
+            return ret;
         }
 
         // 

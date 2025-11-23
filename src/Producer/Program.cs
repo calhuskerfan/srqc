@@ -1,14 +1,13 @@
-﻿using console;
+﻿using Producer;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Serilog;
-using Srqc;
 
 Log.Logger = new LoggerConfiguration()
   .Enrich.WithThreadId()
   .WriteTo.Console(outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {ThreadId,3} {Message:lj}{NewLine}{Exception}")
-  .MinimumLevel.Information()
+  .MinimumLevel.Debug()
   .CreateLogger();
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -19,18 +18,10 @@ builder.Services
         loggingBuilder.ClearProviders();
         loggingBuilder.AddSerilog(dispose: true);
     })
-    .Configure<ConduitConfig>(builder.Configuration.GetSection("ConduitConfig"))
-    .AddTransient<IProcessingSystem, Conduit>()
     .AddSingleton<IApplication, Application>();
 
-builder.Build()
+
+await builder.Build()
     .Services
     .GetRequiredService<IApplication>()
-    .Run();
-
-
-
-
-
-
-
+    .RunAsync();
