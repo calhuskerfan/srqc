@@ -13,6 +13,8 @@ Log.Logger = new LoggerConfiguration()
 
 var builder = Host.CreateApplicationBuilder(args);
 
+//TODOCJH:  Rewview Using UseSerilog(...) instead of add logging.
+
 builder.Services
     .AddLogging(loggingBuilder =>
     {

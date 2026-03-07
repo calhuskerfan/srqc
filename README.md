@@ -9,18 +9,22 @@ The SR Queue Consumer processes messages in parallel while maintaining their ord
 ## Quick Start
 
 Pre-requisites
+
 - git
 - dotnet9
 - VSCode or Visual Studio
 
 Steps
+
 - sync this repo
 - from a command prompt navigate to the .\src\console\ directory
 - from a command run
+
     ```ps1
     # from the ./src/console directory
     dotnet run -c Release
     ```
+
 - when the process completes a breakdown of the messages processed is displayed in addition to a throughput summary.
 
 ## Details
