@@ -1,6 +1,4 @@
-﻿using Microsoft.Extensions.Configuration;
-
-namespace Srqc
+﻿namespace Srqc
 {
     public class ConduitConfig : IConduitConfig
     {

@@ -1,6 +1,7 @@
 using Serilog;
 using Processor;
 using Srqc;
+using Srqc.Domain;
 
 Log.Logger = new LoggerConfiguration()
   .Enrich.WithThreadId()
@@ -19,8 +20,9 @@ builder.Services
     .Configure<ConduitConfig>(builder.Configuration.GetSection("ConduitConfig"));
 
 builder.Services
-    .AddTransient<IProcessingSystem, Conduit>()
+    .AddTransient<IProcessingSystem<MessageIn, MessageOut>, Conduit<MessageIn, MessageOut>>()
     .AddTransient<IWorkerContext, WorkerContext>()
+    .AddSingleton<ITransformerFactory<MessageIn, MessageOut>, Transformer>()
     .AddHostedService<Worker>();
 
 var host = builder.Build();

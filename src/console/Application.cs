@@ -2,9 +2,10 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Srqc;
+using Srqc.Domain;
 using System.Diagnostics;
 
-namespace console
+namespace Console
 {
     public interface IApplication
     {
@@ -21,14 +22,14 @@ namespace console
         private readonly IConfiguration _configuration;
         private readonly ConduitConfig _conduitConfig;
         private readonly ILoggerFactory _loggerFactory;
-        private readonly IProcessingSystem _processingSystem;
+        private readonly IProcessingSystem<MessageIn, MessageOut> _processingSystem;
 
 
         public Application(ILogger<Application> logger,
             IOptions<ConduitConfig> options,
             IConfiguration configuration,
             ILoggerFactory loggerFactory,
-            IProcessingSystem processingSystem)
+            IProcessingSystem<MessageIn, MessageOut> processingSystem)
         {
             _loggerFactory = loggerFactory;
             _logger = logger;
@@ -104,11 +105,12 @@ namespace console
                 }
             };
 
-            console.Application.CreateInboundMessages(ref ctx);
+            Console.Application.CreateInboundMessages(ref ctx);
 
             // register for messages ready at exit
-            _processingSystem.MessageReadyAtExitEvent += (object sender, MessageReadyEventArgs e) =>
+            _processingSystem.MessageReadyAtExitEvent += (object sender, MessageReadyEventArgs<MessageOut> e) =>
             {
+                e.Message.ProcessedByPodIdx = e.ProcessedByPodIdx;
                 ctx.outboundMessages.Add(e.Message);
             };
 

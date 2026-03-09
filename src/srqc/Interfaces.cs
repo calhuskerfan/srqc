@@ -1,17 +1,28 @@
 ﻿namespace Srqc
 {
-    public interface IProcessingSystem
+    public interface IProcessingSystem<TMessageIn, TMessageOut>
     {
-        event EventHandler<MessageReadyEventArgs>? MessageReadyAtExitEvent;
+        event EventHandler<MessageReadyEventArgs<TMessageOut>>? MessageReadyAtExitEvent;
         bool IsSystemEmpty();
-        void LoadMessage(IClaimCheck ticket, MessageIn message);
+        void LoadMessage(IClaimCheck ticket, TMessageIn message);
         void Stop();
         IClaimCheck WaitForProcessingSlotAvailable();
     }
 
-    public interface IProcessingContainer
+    public interface ITransformer<TMessageIn, TMessageOut>
     {
-        void ProcessMessage(MessageIn msg);
+        TMessageOut Transform(TMessageIn msg);
+    }
+
+
+    public interface ITransformerFactory<TMessageIn, TMessageOut>
+    {
+        Func<TMessageIn, TMessageOut> GetTransformer();
+    }
+
+    public interface IProcessingContainer<TMessageIn, TMessageOut>
+    {
+        void ProcessMessage(TMessageIn msg);
         Guid Id { get; }
     }
 
@@ -23,7 +34,7 @@
 
     public interface IClaimCheck
     {
-        Guid Ticket { get; set; }
+        Guid Ticket { get;}
         DateTime Issued { get; }
     }
 }

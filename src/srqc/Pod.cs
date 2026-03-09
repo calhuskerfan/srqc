@@ -16,9 +16,9 @@ namespace Srqc
         Undefined
     }
 
-    public class Pod : IProcessingContainer
+    public class Pod<TMessageIn, TMessageOut> : IProcessingContainer<TMessageIn, TMessageOut> 
     {
-        readonly ILogger _logger = Log.ForContext<Pod>();
+        readonly ILogger _logger = Log.ForContext<Pod<TMessageIn, TMessageOut>>();
 
         public Guid Id { get; } = Guid.NewGuid();
 
@@ -40,7 +40,13 @@ namespace Srqc
         }
 
         // internal members
-        private MessageOut? _message = null;
+        private TMessageOut _message;
+
+        /// <summary>
+        /// Optional translation function. If set, this will be used to convert an inbound
+        /// message to the outbound message type. Signature: TMessageOut Go(TMessageIn)
+        /// </summary>
+        public Func<TMessageIn, TMessageOut>? Go { get; set; }
 
         private EventWaitHandle ProcessingCompleteHandle = new(true, EventResetMode.ManualReset);
 
@@ -51,7 +57,7 @@ namespace Srqc
         }
 
         //
-        public void ProcessMessage(MessageIn msg)
+        public void ProcessMessage(TMessageIn msg)
         {
             if (State != PodState.WaitingToLoad)
             {
@@ -60,12 +66,23 @@ namespace Srqc
 
             State = PodState.Loading;
 
-            Thread ProcessingThread = new Thread(() => ProcessThreadFunc(msg));
+            Thread ProcessingThread = new(() => ProcessThreadFunc(msg));
             ProcessingThread.Start();
         }
 
-        internal void ProcessThreadFunc(MessageIn msg)
+        internal TMessageOut InternalProcess(TMessageIn msg)
         {
+            if (Go != null)
+            {
+                return Go(msg);
+            }
+            throw new InvalidOperationException("No converter provided: set the Pod.Go property to convert TMessageIn to TMessageOut.");
+        }
+
+
+        internal void ProcessThreadFunc(TMessageIn msg)
+        {
+
             ProcessingCompleteHandle.Reset();
 
             LastExecutionTime = TimeSpan.Zero;
@@ -76,20 +93,10 @@ namespace Srqc
 
             if (_logger.IsEnabled(Serilog.Events.LogEventLevel.Debug))
             {
-                _logger.Debug("ProcessThreadFunc in Pod {idx} has started for message {id} with delay of {msec}", Idx, msg.Id, msg.ProcessingMsec);
+                _logger.Debug("ProcessThreadFunc in Pod {idx} has started", Idx);
             }
 
-            _message = new MessageOut()
-            {
-                Text = $"New outbound message is: {msg.Text} from pod {Id}",
-                Id = msg.Id + 10000,
-                MessageInId = msg.Id,
-                RuntimeMsec = msg.ProcessingMsec,
-                ProcessedByPod = Id,
-                ProcessedByPodIdx = Idx
-            };
-
-            Thread.Sleep(msg.ProcessingMsec);
+            _message = InternalProcess(msg);
 
             State = PodState.ReadyToUnload;
 
@@ -104,28 +111,22 @@ namespace Srqc
             ProcessingCompleteHandle.Set();
         }
 
-        //
-        public int GetMessageId()
-        {
-            return _message == null ? 0 : _message.MessageInId;
-        }
-
 
         /// <summary>
         /// Unlpoad the processed message from the pod.
         /// </summary>
         /// <returns></returns>
-        public MessageOut? Unload()
+        public TMessageOut? Unload()
         {
             if (_message == null)
             {
                 _logger.Warning("Pod {idx} has no message to unload", Idx);
                 State = PodState.WaitingToLoad;
-                return null;
+                return default(TMessageOut);
             }
 
-            MessageOut ret = _message.Clone();
-            _message = null;
+            TMessageOut ret = _message;//.Clone();
+            //_message = null;
 
             State = PodState.WaitingToLoad;
             return ret;
