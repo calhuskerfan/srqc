@@ -1,6 +1,6 @@
 # SR Queue Consumer
 
-This repo contains the source code for the project described [here](https://calhuskerfan.github.io/2025/09/28/SQRC.html) and additional components described [here]().  Please refer to the write up for detailed information.
+This repo contains the source code for the project described [here](https://calhuskerfan.github.io/2025/10/22/SQRC-part2.html) Please refer to the write up for detailed information.
 
 ## Introduction
 
