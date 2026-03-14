@@ -14,7 +14,6 @@
         TMessageOut Transform(TMessageIn msg);
     }
 
-
     public interface ITransformerFactory<TMessageIn, TMessageOut>
     {
         Func<TMessageIn, TMessageOut> GetTransformer();

@@ -63,7 +63,7 @@ namespace Srqc
 
                 for (int i = 0; i < _config.PodCount; i++)
                 {
-                    var pod = new Pod<TMessageIn, TMessageOut>(i) { Go = _transformerFactory.GetTransformer() };
+                    var pod = new Pod<TMessageIn, TMessageOut>(i, _transformerFactory.GetTransformer());
                     _pods[i] = pod;
                     PodsAvailableForProcessing.Enqueue(i);
                 }
@@ -172,7 +172,7 @@ namespace Srqc
             }
             else
             {
-                p = new Pod<TMessageIn, TMessageOut>(0) { Go = _transformerFactory.GetTransformer() };
+                p = new Pod<TMessageIn, TMessageOut>(0, _transformerFactory.GetTransformer());
             }
 
             _conduit.Enqueue(p);

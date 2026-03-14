@@ -16,6 +16,15 @@ namespace Srqc
         Undefined
     }
 
+    /// <summary>
+    /// Represents a processing container that handles messages of type TMessageIn and converts them to type TMessageOut
+    /// using an optional translation function.
+    /// </summary>
+    /// <remarks>The Pod class manages its state throughout the message processing lifecycle, including
+    /// loading, running, and unloading states. It provides a mechanism to wait for processing completion and allows for
+    /// optional message translation via the Go property.</remarks>
+    /// <typeparam name="TMessageIn">The type of the inbound message that the Pod processes.</typeparam>
+    /// <typeparam name="TMessageOut">The type of the outbound message that the Pod produces after processing the inbound message.</typeparam>
     public class Pod<TMessageIn, TMessageOut> : IProcessingContainer<TMessageIn, TMessageOut> 
     {
         readonly ILogger _logger = Log.ForContext<Pod<TMessageIn, TMessageOut>>();
@@ -40,19 +49,20 @@ namespace Srqc
         }
 
         // internal members
-        private TMessageOut _message;
+        private TMessageOut? _message;
 
         /// <summary>
         /// Optional translation function. If set, this will be used to convert an inbound
         /// message to the outbound message type. Signature: TMessageOut Go(TMessageIn)
         /// </summary>
-        public Func<TMessageIn, TMessageOut>? Go { get; set; }
+        private Func<TMessageIn, TMessageOut> _go;
 
         private EventWaitHandle ProcessingCompleteHandle = new(true, EventResetMode.ManualReset);
 
-        public Pod(int idx)
+        public Pod(int idx, Func<TMessageIn, TMessageOut> transformer)
         {
             Idx = idx;
+            _go = transformer;
             State = PodState.WaitingToLoad;
         }
 
@@ -72,11 +82,7 @@ namespace Srqc
 
         internal TMessageOut InternalProcess(TMessageIn msg)
         {
-            if (Go != null)
-            {
-                return Go(msg);
-            }
-            throw new InvalidOperationException("No converter provided: set the Pod.Go property to convert TMessageIn to TMessageOut.");
+            return _go(msg);
         }
 
 

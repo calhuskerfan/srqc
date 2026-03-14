@@ -1,10 +1,17 @@
 ﻿using Srqc;
 using Srqc.Domain;
 
-namespace Processor
+namespace Processor.Transformers
 {
-    public class Transformer : ITransformerFactory<MessageIn, MessageOut>
+    public class ExternalServiceTransformerFactory : ITransformerFactory<MessageIn, MessageOut>
     {
+
+        private readonly ILogger<ExternalServiceTransformerFactory> _logger;
+
+        public ExternalServiceTransformerFactory(ILogger<ExternalServiceTransformerFactory> logger)
+        {
+            _logger = logger;
+        }
         public Func<MessageIn, MessageOut> GetTransformer()
         {
             return (MessageIn m) =>

@@ -1,9 +1,9 @@
 ﻿using Srqc;
 using Srqc.Domain;
 
-namespace Console
+namespace Processor.Transformers
 {
-    public class Transformer : ITransformerFactory<MessageIn, MessageOut>
+    public class DefaultTransformerFactory : ITransformerFactory<MessageIn, MessageOut>
     {
         public Func<MessageIn, MessageOut> GetTransformer()
         {
