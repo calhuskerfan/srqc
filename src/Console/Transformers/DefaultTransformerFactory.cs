@@ -3,7 +3,7 @@ using Srqc.Domain;
 
 namespace Console.Transformers
 {
-    public class DeafultTransformerFactory : ITransformerFactory<MessageIn, MessageOut>
+    public class DefaultTransformerFactory : ITransformerFactory<MessageIn, MessageOut>
     {
         public Func<MessageIn, MessageOut> GetTransformer()
         {

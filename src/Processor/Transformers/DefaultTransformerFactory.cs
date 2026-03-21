@@ -10,6 +10,7 @@ namespace Processor.Transformers
             return (MessageIn m) =>
             {
                 Thread.Sleep(m.ProcessingMsec);
+
                 return new MessageOut
                 {
                     Text = $"New outbound message is: {m.Text}",

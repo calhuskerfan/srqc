@@ -75,7 +75,7 @@ namespace Consumer
 
                 lastId  = messgeOut.MessageInId;
 
-                _logger.LogDebug("Message Id: {messageId}", messgeOut.MessageInId);
+                _logger.LogDebug("Consumer Processed Outbound Message Id: {messageId}", messgeOut.MessageInId);
 
                 return Task.CompletedTask;
             };

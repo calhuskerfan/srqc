@@ -43,9 +43,9 @@ namespace Console
         /// Load Inbound Messages Builds a set of test messages.
         /// </summary>
         /// <remarks>
-        /// Case 0: the default, based on appParams
+        /// Case 0: the default, based on appParams.  Creates ctx.appParams.MessageCount Messages with processing times between ctx.appParams.MinProcessingDelay and ctx.appParams.MaxProcessingDelay
         /// Case 1: demonstrates a simple example where pod 1 finishes and starts message 4 while pods 2 and 3 are still running.
-        /// Case 1: demonstrates improvement possibilities by processing all five messages in little more than the 'longest' pole at message 3
+        /// Case 2: demonstrates improvement possibilities by processing all five messages in little more than the 'longest' pole at message 3
         /// </remarks>
         /// <param name="inboundMessages"></param>
         /// <param name="appParams"></param>
@@ -111,6 +111,7 @@ namespace Console
             _processingSystem.MessageReadyAtExitEvent += (object sender, MessageReadyEventArgs<MessageOut> e) =>
             {
                 e.Message.ProcessedByPodIdx = e.ProcessedByPodIdx;
+                e.Message.RuntimeMsec = e.RuntimeMsec;
                 ctx.outboundMessages.Add(e.Message);
             };
 
@@ -129,7 +130,9 @@ namespace Console
 
             _logger.LogInformation("Container Finished Processing");
 
-            ctx.RunQualityCheck(_conduitConfig.PodCount, logindividual: true);
+            bool idxCheck = _configuration.GetValue<bool>("ConduitConfig:ReusePods");
+
+            ctx.RunQualityCheck(_conduitConfig.PodCount, podidxcheck: idxCheck, logindividual: true);
 
             _logger.LogInformation($"Total processing time: {totalProcessingTime.Elapsed.TotalMilliseconds} msec.  Accumulated 'Serial' Time: {ctx.AccumulatedMsec} msec.  Ratio: {ctx.AccumulatedMsec / totalProcessingTime.Elapsed.TotalMilliseconds}");
         }

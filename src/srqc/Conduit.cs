@@ -17,10 +17,9 @@ namespace Srqc
         private readonly ConduitConfig _config;
         private readonly ITransformerFactory<TMessageIn, TMessageOut> _transformerFactory;
 
-        //some internal state
-        private readonly Pod<TMessageIn, TMessageOut>[]? _pods;
-
         bool _running = true;
+
+        private readonly Pod<TMessageIn, TMessageOut>[]? _pods;
 
         //is this thread safe
         IClaimCheck? _nextTicket;

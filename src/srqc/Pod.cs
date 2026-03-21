@@ -55,14 +55,14 @@ namespace Srqc
         /// Optional translation function. If set, this will be used to convert an inbound
         /// message to the outbound message type. Signature: TMessageOut Go(TMessageIn)
         /// </summary>
-        private Func<TMessageIn, TMessageOut> _go;
+        private Func<TMessageIn, TMessageOut> _transformer;
 
         private EventWaitHandle ProcessingCompleteHandle = new(true, EventResetMode.ManualReset);
 
         public Pod(int idx, Func<TMessageIn, TMessageOut> transformer)
         {
             Idx = idx;
-            _go = transformer;
+            _transformer = transformer;
             State = PodState.WaitingToLoad;
         }
 
@@ -82,7 +82,7 @@ namespace Srqc
 
         internal TMessageOut InternalProcess(TMessageIn msg)
         {
-            return _go(msg);
+            return _transformer(msg);
         }
 
 
@@ -121,6 +121,12 @@ namespace Srqc
         /// <summary>
         /// Unlpoad the processed message from the pod.
         /// </summary>
+        /// <remarks>
+        /// This is the one section that I am not sure about.
+        /// Should this be a method that returns the message as it is now or could we set a property that Unload() would read from
+        /// The issue that makes me nervous is if someone holds a reference to the message and then we set it to null or default,
+        /// they would have a reference to the message but it would be in an undefined state.
+        /// </remarks>
         /// <returns></returns>
         public TMessageOut? Unload()
         {
@@ -128,11 +134,11 @@ namespace Srqc
             {
                 _logger.Warning("Pod {idx} has no message to unload", Idx);
                 State = PodState.WaitingToLoad;
+                //NOTE: Should this be a default(TMessageOut) or should it be nullable and return null?
                 return default(TMessageOut);
             }
 
-            TMessageOut ret = _message;//.Clone();
-            //_message = null;
+            TMessageOut ret = _message;
 
             State = PodState.WaitingToLoad;
             return ret;

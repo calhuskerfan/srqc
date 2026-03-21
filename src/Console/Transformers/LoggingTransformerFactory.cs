@@ -17,17 +17,18 @@ namespace Console.Transformers
         {
             if (_logger.IsEnabled(LogLevel.Trace))
             {
-                _logger.LogTrace("Creating a new transformer function that will process MessageIn and produce MessageOut.");
+                _logger.LogTrace("Getting a new transformer function from the TransformerFactory to process MessageIn and produce MessageOut.");
             }
 
             return (MessageIn m) =>
             {
                 if (_logger.IsEnabled(LogLevel.Trace))
                 {
-                    _logger.LogTrace("Processing MessageIn with Id: {MessageId} and Text: {MessageText}", m.Id, m.Text);
+                    _logger.LogTrace("Func<MessageIn, MessageOut> Processing MessageIn with Id: {MessageId} and Text: {MessageText}", m.Id, m.Text);
                 }
 
                 Thread.Sleep(m.ProcessingMsec);
+                
                 return new MessageOut
                 {
                     Text = $"New outbound message is: {m.Text}",
