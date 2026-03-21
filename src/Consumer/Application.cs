@@ -4,8 +4,8 @@ using Microsoft.Extensions.Logging;
 using System.Text;
 using Newtonsoft.Json;
 using Microsoft.Extensions.Configuration;
-using Srqc;
 using Srqc.MessageChannel;
+using Srqc.Domain;
 
 
 namespace Consumer
@@ -75,7 +75,7 @@ namespace Consumer
 
                 lastId  = messgeOut.MessageInId;
 
-                _logger.LogDebug("Message Id: {messageId}", messgeOut.MessageInId);
+                _logger.LogDebug("Consumer Processed Outbound Message Id: {messageId}", messgeOut.MessageInId);
 
                 return Task.CompletedTask;
             };

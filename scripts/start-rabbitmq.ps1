@@ -22,6 +22,11 @@ else {
             -p 15672:15672 `
             -d `
             rabbitmq:4-management    
+
+        Write-Host "Starting new RabbitMQ container '$containerName'."
+        Write-Host "Waiting for RabbitMQ to start..."
+        sleep 20 # Wait for RabbitMQ to start
+
     }
 }
 
@@ -29,4 +34,3 @@ if($launchBrowser) {
     Start-Process "http://localhost:15672"
     Write-Host "Launched RabbitMQ Management UI in browser."
 }
-

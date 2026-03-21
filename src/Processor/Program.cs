@@ -1,28 +1,49 @@
-using Serilog;
 using Processor;
 using Srqc;
+using Srqc.Domain;
+using Processor.Transformers;
 
-Log.Logger = new LoggerConfiguration()
-  .Enrich.WithThreadId()
-  .WriteTo.Console(outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {ThreadId,3} {Message:lj}{NewLine}{Exception}")
-  .MinimumLevel.Information()
-  .CreateLogger();
-
-var builder = Host.CreateApplicationBuilder(args);
+var builder = HostingExtensions.HostingExtensions.GetBuilder(args);
 
 builder.Services
-    .AddLogging(loggingBuilder =>
-    {
-        loggingBuilder.ClearProviders();
-        loggingBuilder.AddSerilog(dispose: true);
-    })
     .Configure<ConduitConfig>(builder.Configuration.GetSection("ConduitConfig"));
 
 builder.Services
-    .AddTransient<IProcessingSystem, Conduit>()
+    .AddTransient<IProcessingSystem<MessageIn, MessageOut>, Conduit<MessageIn, MessageOut>>()
     .AddTransient<IWorkerContext, WorkerContext>()
+    .AddSingleton(
+        typeof(ITransformerFactory<MessageIn, MessageOut>),
+        GetTransformerFactory(builder.Services.BuildServiceProvider()))
     .AddHostedService<Worker>();
 
 var host = builder.Build();
 
 await host.RunAsync();
+
+
+
+/// <summary>
+/// GetTransformerFactory.  This is not the greatest way to do this,
+/// but it helps demonstrate how
+/// the transformer is configured outside of the queue processing.
+/// </summary>
+static Type GetTransformerFactory(IServiceProvider serviceProvider)
+{
+    IConfiguration? configuration = serviceProvider?.GetService<IConfiguration>();
+
+    if (configuration == null)
+    {
+        return typeof(DefaultTransformerFactory);
+    }
+
+    var type = configuration["ConduitConfig:TransformerFactoryType"];
+
+    if (type == null)
+    {
+        return typeof(DefaultTransformerFactory);
+    }
+
+#pragma warning disable CS8603
+    return Type.GetType(type);
+#pragma warning restore CS8603
+}

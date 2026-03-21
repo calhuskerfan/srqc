@@ -1,4 +1,4 @@
-﻿namespace Srqc
+﻿namespace Srqc.Domain
 {
     public class MessageOut
     {

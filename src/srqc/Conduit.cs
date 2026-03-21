@@ -11,23 +11,23 @@ namespace Srqc
     /// The conduit manages the message processing system.
     /// </summary>
     /// <remarks></remarks>
-    public class Conduit : IProcessingSystem
+    public class Conduit<TMessageIn, TMessageOut> : IProcessingSystem<TMessageIn, TMessageOut>
     {
-        private readonly ILogger<Conduit> _logger;
+        private readonly ILogger<Conduit<TMessageIn, TMessageOut>> _logger;
         private readonly ConduitConfig _config;
-
-        //some internal state
-        private readonly Pod[]? _pods;
+        private readonly ITransformerFactory<TMessageIn, TMessageOut> _transformerFactory;
 
         bool _running = true;
+
+        private readonly Pod<TMessageIn, TMessageOut>[]? _pods;
 
         //is this thread safe
         IClaimCheck? _nextTicket;
 
         // the concurrent queue that is holding the pods as they are processing
-        internal ConcurrentQueue<Pod> _conduit { get; private set; } = new ConcurrentQueue<Pod>();
+        internal ConcurrentQueue<Pod<TMessageIn, TMessageOut>> _conduit { get; private set; } = new ConcurrentQueue<Pod<TMessageIn, TMessageOut>>();
 
-        public event EventHandler<MessageReadyEventArgs>? MessageReadyAtExitEvent;
+        public event EventHandler<MessageReadyEventArgs <TMessageOut>>? MessageReadyAtExitEvent;
 
         private readonly EventWaitHandle WaitToLoadHandle = new(true, EventResetMode.ManualReset);
 
@@ -48,19 +48,22 @@ namespace Srqc
         /// </summary>
         /// <param name="config"></param>
         public Conduit(
-            ILogger<Conduit> logger,
-            IOptions<ConduitConfig> options)
+            ILogger<Conduit<TMessageIn, TMessageOut>> logger,
+            IOptions<ConduitConfig> options,
+            ITransformerFactory<TMessageIn, TMessageOut> transformerFactory)
         {
             _logger = logger;
             _config = options.Value;
+            _transformerFactory = transformerFactory;
 
             if (_config.ReUsePods)
             {
-                _pods = new Pod[_config.PodCount];
+                _pods = new Pod<TMessageIn, TMessageOut>[_config.PodCount];
 
                 for (int i = 0; i < _config.PodCount; i++)
                 {
-                    _pods[i] = new Pod(i);
+                    var pod = new Pod<TMessageIn, TMessageOut>(i, _transformerFactory.GetTransformer());
+                    _pods[i] = pod;
                     PodsAvailableForProcessing.Enqueue(i);
                 }
             }
@@ -89,20 +92,22 @@ namespace Srqc
 
             while (_running || !IsSystemEmpty())
             {
-                Pod? pod;
+                Pod<TMessageIn, TMessageOut>? pod;
 
                 if (_conduit.TryDequeue(out pod))
                 {
                     pod.WaitForProcessingComplete();
 
                     _logger.LogInformation(
-                        "Pod {idx:D3}: Message {id:D4} completed in {msec}", pod.Idx, pod.GetMessageId(), pod.LastExecutionTime.TotalMilliseconds);
-
+                        "Pod {idx:D3}: Completed in {msec}", pod.Idx, pod.LastExecutionTime.TotalMilliseconds);
 
                     //fire the event that message has been completed
-                    OnMessageReady(new MessageReadyEventArgs()
+                    OnMessageReady(new MessageReadyEventArgs<TMessageOut>()
                     {
-                        Message = pod.Unload()
+                        Message = pod.Unload(),
+                        RuntimeMsec = (int)pod.LastExecutionTime.TotalMilliseconds,
+                        ProcessedByPod = pod.Id,
+                        ProcessedByPodIdx = pod.Idx
                     });
 
                     if (_config.ReUsePods)
@@ -131,11 +136,13 @@ namespace Srqc
         /// </summary>
         /// <param name="message"></param>
         /// <exception cref="InvalidOperationException"></exception>
-        public void LoadMessage(IClaimCheck claimCheck, MessageIn message)
+        public void LoadMessage(IClaimCheck claimCheck, TMessageIn message)
         {
+            var msg = message;
+
             if (_logger.IsEnabled(LogLevel.Debug))
             {
-                _logger.LogDebug("LoadMessage: Queue message {id}", message.Id);
+                _logger.LogDebug("LoadMessage: claimcheck {id}", claimCheck.Ticket);
             }
 
             if (claimCheck.Ticket != _nextTicket.Ticket)
@@ -148,7 +155,7 @@ namespace Srqc
             // The second is where we want to 
             // reuse pods becuase there is significant initialization time involved.
 
-            Pod p;
+            Pod<TMessageIn, TMessageOut> p;
 
             if (_config.ReUsePods)
             {
@@ -164,12 +171,12 @@ namespace Srqc
             }
             else
             {
-                p = new Pod(0);
+                p = new Pod<TMessageIn, TMessageOut>(0, _transformerFactory.GetTransformer());
             }
 
             _conduit.Enqueue(p);
 
-            p.ProcessMessage(message);
+            p.ProcessMessage(msg);
 
             _logger.LogDebug("Pods in Conduit {Count}", _conduit.Count);
 
@@ -205,7 +212,7 @@ namespace Srqc
         {
             WaitToLoadHandle.WaitOne();
             WaitToLoadHandle.Reset();
-            _nextTicket = new ClaimCheck() { Ticket = new Guid() };
+            _nextTicket = new ClaimCheck();
             return _nextTicket;
         }
 
@@ -230,7 +237,7 @@ namespace Srqc
         /// OnMessageReady
         /// </summary>
         /// <param name="e"></param>
-        protected virtual void OnMessageReady(MessageReadyEventArgs e)
+        protected virtual void OnMessageReady(MessageReadyEventArgs<TMessageOut> e)
         {
             MessageReadyAtExitEvent?.Invoke(this, e);
         }

@@ -1,7 +1,7 @@
 ﻿using Serilog;
-using Srqc;
+using Srqc.Domain;
 
-namespace console
+namespace Console
 {
     public class ApplicationContext
     {

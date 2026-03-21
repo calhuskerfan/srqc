@@ -2,9 +2,10 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Srqc;
+using Srqc.Domain;
 using System.Diagnostics;
 
-namespace console
+namespace Console
 {
     public interface IApplication
     {
@@ -21,14 +22,14 @@ namespace console
         private readonly IConfiguration _configuration;
         private readonly ConduitConfig _conduitConfig;
         private readonly ILoggerFactory _loggerFactory;
-        private readonly IProcessingSystem _processingSystem;
+        private readonly IProcessingSystem<MessageIn, MessageOut> _processingSystem;
 
 
         public Application(ILogger<Application> logger,
             IOptions<ConduitConfig> options,
             IConfiguration configuration,
             ILoggerFactory loggerFactory,
-            IProcessingSystem processingSystem)
+            IProcessingSystem<MessageIn, MessageOut> processingSystem)
         {
             _loggerFactory = loggerFactory;
             _logger = logger;
@@ -42,9 +43,9 @@ namespace console
         /// Load Inbound Messages Builds a set of test messages.
         /// </summary>
         /// <remarks>
-        /// Case 0: the default, based on appParams
+        /// Case 0: the default, based on appParams.  Creates ctx.appParams.MessageCount Messages with processing times between ctx.appParams.MinProcessingDelay and ctx.appParams.MaxProcessingDelay
         /// Case 1: demonstrates a simple example where pod 1 finishes and starts message 4 while pods 2 and 3 are still running.
-        /// Case 1: demonstrates improvement possibilities by processing all five messages in little more than the 'longest' pole at message 3
+        /// Case 2: demonstrates improvement possibilities by processing all five messages in little more than the 'longest' pole at message 3
         /// </remarks>
         /// <param name="inboundMessages"></param>
         /// <param name="appParams"></param>
@@ -104,11 +105,13 @@ namespace console
                 }
             };
 
-            console.Application.CreateInboundMessages(ref ctx);
+            Console.Application.CreateInboundMessages(ref ctx);
 
             // register for messages ready at exit
-            _processingSystem.MessageReadyAtExitEvent += (object sender, MessageReadyEventArgs e) =>
+            _processingSystem.MessageReadyAtExitEvent += (object sender, MessageReadyEventArgs<MessageOut> e) =>
             {
+                e.Message.ProcessedByPodIdx = e.ProcessedByPodIdx;
+                e.Message.RuntimeMsec = e.RuntimeMsec;
                 ctx.outboundMessages.Add(e.Message);
             };
 
@@ -127,7 +130,9 @@ namespace console
 
             _logger.LogInformation("Container Finished Processing");
 
-            ctx.RunQualityCheck(_conduitConfig.PodCount, logindividual: true);
+            bool idxCheck = _configuration.GetValue<bool>("ConduitConfig:ReusePods");
+
+            ctx.RunQualityCheck(_conduitConfig.PodCount, podidxcheck: idxCheck, logindividual: true);
 
             _logger.LogInformation($"Total processing time: {totalProcessingTime.Elapsed.TotalMilliseconds} msec.  Accumulated 'Serial' Time: {ctx.AccumulatedMsec} msec.  Ratio: {ctx.AccumulatedMsec / totalProcessingTime.Elapsed.TotalMilliseconds}");
         }

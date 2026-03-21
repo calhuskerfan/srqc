@@ -2,7 +2,7 @@
 {
     public class ClaimCheck : IClaimCheck
     {
-        public Guid Ticket { get; set; }
+        public Guid Ticket { get; } = Guid.NewGuid();
         public DateTime Issued { get;} = DateTime.UtcNow;
     }
 }

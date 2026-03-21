@@ -2,7 +2,7 @@
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using RabbitMQ.Client;
-using Srqc;
+using Srqc.Domain;
 using Srqc.MessageChannel;
 using System.Text;
 
@@ -28,7 +28,6 @@ namespace Producer
             _logger = logger;
             _configuration = configuration;
 
-            //move this to DI
             _channelWriter = new ChannelWriter()
             {
                 ChannelName = _configuration["OutboundChannel:Name"].ToString()
@@ -50,20 +49,36 @@ namespace Producer
                 autoDelete: false,
                 arguments: null);
 
+            int cycle = 0;
+            int messagesPerCycle = Convert.ToInt32(_configuration["AppSettings:MessagesPerCycle"]);
+            int total = 0;
 
-            for (int i = 0; i < Convert.ToInt32(_configuration["AppSettings:MessageCount"]); i++)
+            while (true)
             {
-                MessageIn mi = new() { Id = i, Text= $"{i}" };
+                for (int i = cycle * messagesPerCycle; i < messagesPerCycle + (cycle * messagesPerCycle); i++)
+                {
+                    MessageIn mi = new() { Id = total, Text = $"{total}" };
 
-                var body = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(mi));
+                    var body = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(mi));
 
-                await sendChannel.BasicPublishAsync(
-                    string.Empty,
-                    _channelWriter.ChannelName,
-                    body);
+                    await sendChannel.BasicPublishAsync(
+                        string.Empty,
+                        _channelWriter.ChannelName,
+                        body);
+
+                    total++;
+                }
+
+                _logger.LogInformation("Finished producing {messageCount} messages", messagesPerCycle);
+
+                Console.WriteLine("A to run another message cycle.  Any other key exists");
+                var nexta = Console.ReadKey();
+                
+                if(!(nexta.Key == ConsoleKey.A))
+                {
+                    break;
+                }
             }
-
-            _logger.LogInformation("Finished producing {messageCount} messages", _configuration["AppSettings:MessageCount"]);
         }
     }
 #pragma warning restore CS8602

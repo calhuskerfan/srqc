@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using System.Text;
 using Srqc;
 using Srqc.MessageChannel;
+using Srqc.Domain;
 
 namespace Processor
 {
@@ -16,7 +17,7 @@ namespace Processor
         internal static Random r = new();
 
         private readonly ILogger<Worker> _logger;
-        private readonly IProcessingSystem _processingSystem;
+        private readonly IProcessingSystem<MessageIn, MessageOut> _processingSystem;
         private readonly IConfiguration _configuration;
         private readonly IWorkerContext _context;
 
@@ -26,7 +27,7 @@ namespace Processor
         public Worker(
             ILogger<Worker> logger,
             IWorkerContext context,
-            IProcessingSystem processingSystem,
+            IProcessingSystem<MessageIn, MessageOut> processingSystem,
             IConfiguration configuration)
         {
             _logger = logger;
@@ -62,7 +63,7 @@ namespace Processor
                 autoDelete: false,
                 arguments: null);
 
-            _processingSystem.MessageReadyAtExitEvent += (object sender, MessageReadyEventArgs e) =>
+            _processingSystem.MessageReadyAtExitEvent += (object sender, MessageReadyEventArgs<MessageOut> e) =>
             {
                 _logger.LogInformation(e.Message.ToString());
 

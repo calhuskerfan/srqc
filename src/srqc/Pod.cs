@@ -16,9 +16,18 @@ namespace Srqc
         Undefined
     }
 
-    public class Pod : IProcessingContainer
+    /// <summary>
+    /// Represents a processing container that handles messages of type TMessageIn and converts them to type TMessageOut
+    /// using an optional translation function.
+    /// </summary>
+    /// <remarks>The Pod class manages its state throughout the message processing lifecycle, including
+    /// loading, running, and unloading states. It provides a mechanism to wait for processing completion and allows for
+    /// optional message translation via the Go property.</remarks>
+    /// <typeparam name="TMessageIn">The type of the inbound message that the Pod processes.</typeparam>
+    /// <typeparam name="TMessageOut">The type of the outbound message that the Pod produces after processing the inbound message.</typeparam>
+    public class Pod<TMessageIn, TMessageOut> : IProcessingContainer<TMessageIn, TMessageOut> 
     {
-        readonly ILogger _logger = Log.ForContext<Pod>();
+        readonly ILogger _logger = Log.ForContext<Pod<TMessageIn, TMessageOut>>();
 
         public Guid Id { get; } = Guid.NewGuid();
 
@@ -40,18 +49,25 @@ namespace Srqc
         }
 
         // internal members
-        private MessageOut? _message = null;
+        private TMessageOut? _message;
+
+        /// <summary>
+        /// Optional translation function. If set, this will be used to convert an inbound
+        /// message to the outbound message type. Signature: TMessageOut Go(TMessageIn)
+        /// </summary>
+        private Func<TMessageIn, TMessageOut> _transformer;
 
         private EventWaitHandle ProcessingCompleteHandle = new(true, EventResetMode.ManualReset);
 
-        public Pod(int idx)
+        public Pod(int idx, Func<TMessageIn, TMessageOut> transformer)
         {
             Idx = idx;
+            _transformer = transformer;
             State = PodState.WaitingToLoad;
         }
 
         //
-        public void ProcessMessage(MessageIn msg)
+        public void ProcessMessage(TMessageIn msg)
         {
             if (State != PodState.WaitingToLoad)
             {
@@ -60,12 +76,19 @@ namespace Srqc
 
             State = PodState.Loading;
 
-            Thread ProcessingThread = new Thread(() => ProcessThreadFunc(msg));
+            Thread ProcessingThread = new(() => ProcessThreadFunc(msg));
             ProcessingThread.Start();
         }
 
-        internal void ProcessThreadFunc(MessageIn msg)
+        internal TMessageOut InternalProcess(TMessageIn msg)
         {
+            return _transformer(msg);
+        }
+
+
+        internal void ProcessThreadFunc(TMessageIn msg)
+        {
+
             ProcessingCompleteHandle.Reset();
 
             LastExecutionTime = TimeSpan.Zero;
@@ -76,20 +99,10 @@ namespace Srqc
 
             if (_logger.IsEnabled(Serilog.Events.LogEventLevel.Debug))
             {
-                _logger.Debug("ProcessThreadFunc in Pod {idx} has started for message {id} with delay of {msec}", Idx, msg.Id, msg.ProcessingMsec);
+                _logger.Debug("ProcessThreadFunc in Pod {idx} has started", Idx);
             }
 
-            _message = new MessageOut()
-            {
-                Text = $"New outbound message is: {msg.Text} from pod {Id}",
-                Id = msg.Id + 10000,
-                MessageInId = msg.Id,
-                RuntimeMsec = msg.ProcessingMsec,
-                ProcessedByPod = Id,
-                ProcessedByPodIdx = Idx
-            };
-
-            Thread.Sleep(msg.ProcessingMsec);
+            _message = InternalProcess(msg);
 
             State = PodState.ReadyToUnload;
 
@@ -104,28 +117,28 @@ namespace Srqc
             ProcessingCompleteHandle.Set();
         }
 
-        //
-        public int GetMessageId()
-        {
-            return _message == null ? 0 : _message.MessageInId;
-        }
-
 
         /// <summary>
         /// Unlpoad the processed message from the pod.
         /// </summary>
+        /// <remarks>
+        /// This is the one section that I am not sure about.
+        /// Should this be a method that returns the message as it is now or could we set a property that Unload() would read from
+        /// The issue that makes me nervous is if someone holds a reference to the message and then we set it to null or default,
+        /// they would have a reference to the message but it would be in an undefined state.
+        /// </remarks>
         /// <returns></returns>
-        public MessageOut? Unload()
+        public TMessageOut? Unload()
         {
             if (_message == null)
             {
                 _logger.Warning("Pod {idx} has no message to unload", Idx);
                 State = PodState.WaitingToLoad;
-                return null;
+                //NOTE: Should this be a default(TMessageOut) or should it be nullable and return null?
+                return default(TMessageOut);
             }
 
-            MessageOut ret = _message.Clone();
-            _message = null;
+            TMessageOut ret = _message;
 
             State = PodState.WaitingToLoad;
             return ret;

@@ -13,6 +13,5 @@ Push-Location "Producer"
 Start-Process -FilePath "dotnet" -ArgumentList "run --project Producer.csproj -c Release"
 Pop-Location
 
-
 Pop-Location
 Pop-Location

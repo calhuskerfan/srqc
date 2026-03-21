@@ -1,4 +1,4 @@
-namespace console
+namespace Console
 {
     public class ApplicationParameters
     {

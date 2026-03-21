@@ -1,29 +1,20 @@
-﻿using console;
+﻿using Console;
+using Console.Transformers;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Serilog;
 using Srqc;
+using Srqc.Domain;
 
-Log.Logger = new LoggerConfiguration()
-  .Enrich.WithThreadId()
-  .WriteTo.Console(outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {ThreadId,3} {Message:lj}{NewLine}{Exception}")
-  .MinimumLevel.Information()
-  .CreateLogger();
+var builder = HostingExtensions.HostingExtensions.GetBuilder(args);
 
-var builder = Host.CreateApplicationBuilder(args);
-
-//TODOCJH:  Rewview Using UseSerilog(...) instead of add logging.
-
+// set up all our services
 builder.Services
-    .AddLogging(loggingBuilder =>
-    {
-        loggingBuilder.ClearProviders();
-        loggingBuilder.AddSerilog(dispose: true);
-    })
     .Configure<ConduitConfig>(builder.Configuration.GetSection("ConduitConfig"))
-    .AddTransient<IProcessingSystem, Conduit>()
-    .AddSingleton<IApplication, Application>();
+    .AddTransient<IProcessingSystem<MessageIn, MessageOut>, Conduit<MessageIn, MessageOut>>()
+    .AddSingleton<IApplication, Application>()
+    .AddSingleton(
+        typeof(ITransformerFactory<MessageIn, MessageOut>), 
+        GetTransformerFactory(builder.Services.BuildServiceProvider()));
 
 builder.Build()
     .Services
@@ -31,8 +22,28 @@ builder.Build()
     .Run();
 
 
+/// <summary>
+/// GetTransformerFactory.  This is not the greatest way to do this,
+/// but it helps demonstrate how
+/// the transformer is configured outside of the queue processing.
+/// </summary>
+static Type GetTransformerFactory(IServiceProvider serviceProvider)
+{
+    IConfiguration? configuration = serviceProvider?.GetService<IConfiguration>();
 
+    if (configuration == null)
+    {
+        return typeof(DefaultTransformerFactory);
+    }
 
+    var type = configuration["ConduitConfig:TransformerFactoryType"];
 
+    if (type == null)
+    {
+        return typeof(DefaultTransformerFactory);
+    }
 
-
+#pragma warning disable CS8603
+    return Type.GetType(type);
+#pragma warning restore CS8603
+}
