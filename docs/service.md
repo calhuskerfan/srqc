@@ -9,7 +9,7 @@ Environment
 - dotnet10
 - git
 - VSCode or Visual Studio
-- docker desktop [Windows Installer](https://docs.docker.com/desktop/setup/install/windows-install/)
+- docker desktop. [Windows Installer](https://docs.docker.com/desktop/setup/install/windows-install/)
 - [Windows Terminal](https://learn.microsoft.com/en-us/windows/terminal/install)
 
 The system is comprised of the following four elements.
@@ -27,19 +27,27 @@ Open a powershell terminal and navigate to:
 ./scripts
 
 ``` ps1
-# run the following to the rabbitmq docker image
+# run the following to pull rabbitmq docker image
 docker pull rabbitmq:4-management
 ```
 
 ``` ps1
-# start rabbit, and the applications.
-.\start-all.ps1
+# start rabbit
+.\start-rabbit.ps1
 ```
-
-`start-all.ps1` will:
 
 1. Start the RabbitMQ image in a container.
 1. Launch a browser pointed to the RabbitMQ manager localhost at http://localhost:15672/.  The login is guest/guest.
+
+The script includes a 20 second delay since the demonstration applications do not have connection retries.  This is on the list of updates.
+
+``` ps1
+# start rabbit
+.\start-applications.ps1
+```
+
+`start-applications.ps1` will:
+
 1. Start the processing hosted service in a terminal window.
 1. Start the consuming hosted service in a terminal window.
 1. Start the producing application in a terminal window.
