@@ -1,4 +1,4 @@
-# SQRC Console Application
+# SRQC Console Application
 
 There are two primary modes that the console application will run in for demonstration.  Each is described below:
 

@@ -1,10 +1,10 @@
-# SR Queue Consumer
+# Smugglers Run Queue Consumer
 
-This repo contains the source code for the project described [here](https://calhuskerfan.github.io/2025/09/28/SQRC.html) and additional components described [here](https://calhuskerfan.github.io/2025/10/22/SQRC-part2.html).  Please refer to the write up for detailed information.
+This repo contains the source code for the project described [here](https://calhuskerfan.github.io/2026/03/05/SQRC-part3.html).  Please refer to the write up for detailed information.
 
 ## Introduction
 
-The SR Queue Consumer processes messages in parallel while maintaining their order.  Messages are processed by containers (pods) responsible for message transformation on a worker thread.  Pods are kept in order by a concurrent queue.
+The Smugglers Run Queue Consumer (SRQC) processes messages in parallel while maintaining First In First Out (FIFO) order.  Messages are processed by containers (pods) responsible for message transformation on a worker thread.  Pods are kept in order by a dotnet concurrent queue.
 
 Additionally the Message Types, Inbound and Oubound, as well as the message transformation logic are declared at runtime allowing for the SRQC to be a re-usable library.
 
@@ -13,14 +13,15 @@ Additionally the Message Types, Inbound and Oubound, as well as the message tran
 Pre-requisites
 
 - git
-- dotnet9
+- dotnet10
 - VSCode or Visual Studio
+- [Windows Terminal](https://learn.microsoft.com/en-us/windows/terminal/install)
 
 Steps
 
 - sync this repo
 - from a command prompt navigate to the .\src\console\ directory
-- from a command run
+- run
 
     ```ps1
     # from the ./src/console directory
@@ -31,7 +32,7 @@ Steps
 
 ## Details
 
-The project consists of the srqc library and two consumption demonstrations.  The first is a self contained console application, and the second is running inside a Hosted service consuming and delivering messages contained in a message queing service.
+The project consists of the SRQC library and two consumption demonstrations.  The first is a self contained console application, and the second is running inside a Hosted service consuming and delivering messages via a message broker service.
  - refer to [console details](./docs/console.md) for console mode operations and options
  - refer to [service instructions](./docs/service.md) for details on running service, producer, and consumer.
 
