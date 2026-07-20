@@ -12,6 +12,7 @@ namespace Srqc
     /// </summary>
     /// <remarks></remarks>
     public class Conduit<TMessageIn, TMessageOut> : IProcessingSystem<TMessageIn, TMessageOut>
+        where TMessageOut : ICloneable
     {
         private readonly ILogger<Conduit<TMessageIn, TMessageOut>> _logger;
         private readonly ConduitConfig _config;
@@ -21,15 +22,16 @@ namespace Srqc
 
         private readonly Pod<TMessageIn, TMessageOut>[]? _pods;
 
-        //is this thread safe
         IClaimCheck? _nextTicket;
 
         // the concurrent queue that is holding the pods as they are processing
         internal ConcurrentQueue<Pod<TMessageIn, TMessageOut>> _conduit { get; private set; } = new ConcurrentQueue<Pod<TMessageIn, TMessageOut>>();
 
-        public event EventHandler<MessageReadyEventArgs <TMessageOut>>? MessageReadyAtExitEvent;
+        public event EventHandler<MessageReadyEventArgs<TMessageOut>>? MessageReadyAtExitEvent;
 
         private readonly EventWaitHandle WaitToLoadHandle = new(true, EventResetMode.ManualReset);
+        private readonly object _ticketLock = new();
+
 
         /*
         if we are reusing pods this queue will keep
@@ -68,7 +70,7 @@ namespace Srqc
                 }
             }
 
-            _unloadProcessingThread = new Thread(() => ProcessConduitUnloadThreadFunc());
+            _unloadProcessingThread = new Thread(() => UnloadPodsThreadFunc());
             _unloadProcessingThread.Start();
         }
 
@@ -86,9 +88,9 @@ namespace Srqc
         /// The ProcessConduitUnloadThreadFunc is responsible for processing the Pod
         /// at the exit of conduit.
         /// </summary>
-        private void ProcessConduitUnloadThreadFunc()
+        private void UnloadPodsThreadFunc()
         {
-            _logger.LogInformation("ProcessConduitUnloadThreadFunc Starting");
+            _logger.LogInformation("UnloadPodsThreadFunc Starting");
 
             while (_running || !IsSystemEmpty())
             {
@@ -96,18 +98,21 @@ namespace Srqc
 
                 if (_conduit.TryDequeue(out pod))
                 {
+                    _logger.LogInformation(
+                        "Pod: {idx:D3}. Waiting to Complete", pod.Idx);
+
                     pod.WaitForProcessingComplete();
 
                     _logger.LogInformation(
-                        "Pod {idx:D3}: Completed in {msec}", pod.Idx, pod.LastExecutionTime.TotalMilliseconds);
+                        "Pod: {idx:D3}. Completed in {msec}", pod.Idx, pod.LastExecutionTime.TotalMilliseconds);
 
                     //fire the event that message has been completed
                     OnMessageReady(new MessageReadyEventArgs<TMessageOut>()
                     {
-                        Message = pod.Unload(),
                         RuntimeMsec = (int)pod.LastExecutionTime.TotalMilliseconds,
                         ProcessedByPod = pod.Id,
-                        ProcessedByPodIdx = pod.Idx
+                        ProcessedByPodIdx = pod.Idx,
+                        Message = pod.Unload()
                     });
 
                     if (_config.ReUsePods)
@@ -145,9 +150,15 @@ namespace Srqc
                 _logger.LogDebug("LoadMessage: claimcheck {id}", claimCheck.Ticket);
             }
 
-            if (claimCheck.Ticket != _nextTicket.Ticket)
+            lock (_ticketLock)
             {
-                throw new InvalidOperationException("Invalid Claim Check");
+                if (_nextTicket == null || claimCheck.Ticket != _nextTicket.Ticket)
+                {
+                    throw new InvalidOperationException("Invalid Claim Check");
+                }
+
+                // consume the ticket
+                _nextTicket = null;
             }
 
             // There are two use cases that we want to explore.  One is a new pod for every
@@ -183,6 +194,10 @@ namespace Srqc
             if (ReadyToLoad())
             {
                 //there are slots available
+                if(_logger.IsEnabled(LogLevel.Trace))
+                {
+                    _logger.LogTrace("Conduit has slots available for processing");
+                }
                 WaitToLoadHandle.Set();
             }
         }
@@ -212,8 +227,11 @@ namespace Srqc
         {
             WaitToLoadHandle.WaitOne();
             WaitToLoadHandle.Reset();
-            _nextTicket = new ClaimCheck();
-            return _nextTicket;
+            lock (_ticketLock)
+            {
+                _nextTicket = new ClaimCheck();
+                return _nextTicket;
+            }
         }
 
         /// <summary>

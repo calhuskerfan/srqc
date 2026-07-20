@@ -1,6 +1,6 @@
 ﻿namespace Srqc.Domain
 {
-    public class MessageOut
+    public class MessageOut : ICloneable
     {
         public int Id { get; set; }
         public int MessageInId { get; set; }
@@ -24,6 +24,11 @@
         public MessageOut Clone()
         {
             return (MessageOut)this.MemberwiseClone();
+        }
+
+        object ICloneable.Clone()
+        {
+            return Clone();
         }
     }
 }
