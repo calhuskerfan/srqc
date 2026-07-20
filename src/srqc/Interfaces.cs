@@ -1,6 +1,6 @@
 ﻿namespace Srqc
 {
-    public interface IProcessingSystem<TMessageIn, TMessageOut>
+    public interface IProcessingSystem<TMessageIn, TMessageOut> where TMessageOut : ICloneable
     {
         event EventHandler<MessageReadyEventArgs<TMessageOut>>? MessageReadyAtExitEvent;
         bool IsSystemEmpty();
@@ -19,7 +19,7 @@
         Func<TMessageIn, TMessageOut> GetTransformer();
     }
 
-    public interface IProcessingContainer<TMessageIn, TMessageOut>
+    public interface IProcessingContainer<TMessageIn, TMessageOut> where TMessageOut : ICloneable
     {
         void ProcessMessage(TMessageIn msg);
         Guid Id { get; }

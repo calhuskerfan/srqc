@@ -25,7 +25,8 @@ namespace Srqc
     /// optional message translation via the Go property.</remarks>
     /// <typeparam name="TMessageIn">The type of the inbound message that the Pod processes.</typeparam>
     /// <typeparam name="TMessageOut">The type of the outbound message that the Pod produces after processing the inbound message.</typeparam>
-    public class Pod<TMessageIn, TMessageOut> : IProcessingContainer<TMessageIn, TMessageOut> 
+    public class Pod<TMessageIn, TMessageOut> : IProcessingContainer<TMessageIn, TMessageOut>
+        where TMessageOut : ICloneable
     {
         readonly ILogger _logger = Log.ForContext<Pod<TMessageIn, TMessageOut>>();
 
@@ -74,6 +75,11 @@ namespace Srqc
                 throw new InvalidOperationException($"Pod {Idx} is in State {State}");
             }
 
+            //NOTECJH: We are committed here.  This was originally in ThreadStart, but
+            //there was a race condition on the load and unload threads.  Putting this here for now,
+            //but lets look for a better way to handle this.
+            ProcessingCompleteHandle.Reset();
+
             State = PodState.Loading;
 
             Thread ProcessingThread = new(() => ProcessThreadFunc(msg));
@@ -88,18 +94,13 @@ namespace Srqc
 
         internal void ProcessThreadFunc(TMessageIn msg)
         {
-
-            ProcessingCompleteHandle.Reset();
-
-            LastExecutionTime = TimeSpan.Zero;
-
             Stopwatch sw = Stopwatch.StartNew();
 
             State = PodState.Running;
 
             if (_logger.IsEnabled(Serilog.Events.LogEventLevel.Debug))
             {
-                _logger.Debug("ProcessThreadFunc in Pod {idx} has started", Idx);
+                _logger.Debug("Pod: {idx:D3} ProcessThreadFunc has started", Idx);
             }
 
             _message = InternalProcess(msg);
@@ -108,7 +109,7 @@ namespace Srqc
 
             if (_logger.IsEnabled(Serilog.Events.LogEventLevel.Debug))
             {
-                _logger.Debug("Pod {idx:D3} ProcessThreadFunc has Completed {state}", Idx, State);
+                _logger.Debug("Pod: {idx:D3} ProcessThreadFunc has Completed {state}", Idx, State);
             }
 
             sw.Stop();
@@ -132,14 +133,23 @@ namespace Srqc
         {
             if (_message == null)
             {
-                _logger.Warning("Pod {idx} has no message to unload", Idx);
+                _logger.Warning("Pod: {idx:D3}. has no message to unload", Idx);
                 State = PodState.WaitingToLoad;
-                //NOTE: Should this be a default(TMessageOut) or should it be nullable and return null?
+                //NOTE: Should this be a default(TMessageOut) 
+                //or should it be nullable and return null?
                 return default(TMessageOut);
             }
 
-            TMessageOut ret = _message;
+            if (State != PodState.ReadyToUnload)
+            {
+                _logger.Error("Pod: {idx:D3}. is in State {state} and cannot be unloaded", Idx, State);
+                throw new InvalidOperationException($"Pod {Idx} is in State {State}");
+            }
 
+            //clone here so that the caller has a copy of the message and we can set our internal reference to null
+            TMessageOut ret = (TMessageOut)((ICloneable)_message).Clone();
+            _message = default(TMessageOut);
+            LastExecutionTime = TimeSpan.Zero;
             State = PodState.WaitingToLoad;
             return ret;
         }
